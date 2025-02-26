@@ -1,104 +1,115 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import useLogout from '@/utils/logout';
+import { 
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ChevronDown } from 'lucide-react';
+import { LogOut, ChevronDown, Home } from 'lucide-react';
 
 const AgentDashboard = () => {
-  const navigate = useNavigate();
-  const [userRole, setUserRole] = useState('');
-  const [userEmail, setUserEmail] = useState('');
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+    const navigate = useNavigate();
+    const handleLogout = useLogout();
+    const [userRole, setUserRole] = useState('');
+    const [userEmail, setUserEmail] = useState('');
+    const [userFullName, setUserFullName] = useState('');
+    const [userAvatarUrl, setUserAvatarUrl] = useState('');
 
-  useEffect(() => {
-    const roleCookie = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('user_role='))
-      ?.split('=')[1];
+    useEffect(() => {
+        const getCookie = (name) => {
+            const value = document.cookie
+                .split('; ')
+                .find(row => row.startsWith(`${name}=`))
+                ?.split('=')[1];
+            return value ? decodeURIComponent(value) : '';
+        };
 
-    const emailCookie = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('user_email='))
-      ?.split('=')[1];
+        const role = getCookie('user_role');
+        const email = getCookie('user_email');
+        const fullName = getCookie('user_full_name').replace(/\+/g, ' ');
+        const avatarUrl = getCookie('user_avatar_url');
 
-    if (!roleCookie || decodeURIComponent(roleCookie) !== 'agent') {
-      navigate('/login');
-    } else {
-      setUserRole(decodeURIComponent(roleCookie));
-      setUserEmail(decodeURIComponent(emailCookie || ''));
-    }
-  }, [navigate]);
+        if (!role || role !== 'agent') {
+            navigate('/login');
+        } else {
+            setUserRole(role);
+            setUserEmail(email);
+            setUserFullName(fullName);
+            setUserAvatarUrl(avatarUrl);
+        }
+    }, [navigate]);
 
-  const handleLogout = async () => {
-    try {
-      await axios.post(
-        `${import.meta.env.VITE_API_URL}/logout`,
-        {},
-        { withCredentials: true }
-      );
-      navigate('/login');
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
-  };
+    const defaultAvatarUrl = 'https://shorturl.at/SdLf2';
 
-  const getProfileLetter = (email) => {
-    if (!email) return '@'; 
-    const firstLetter = email.match(/[A-Za-z]/)?.[0] || 'A';
-    return firstLetter.toUpperCase();
-  };
+    return (
+        <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
+            <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                <div className="w-full flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
+                    <div className="flex items-center gap-2">
+                        <Home className="h-6 w-6" />
+                        <h1 className="text-xl font-semibold tracking-tight">Agent Dashboard</h1>
+                    </div>
 
-  return (
-    <div className="flex flex-col min-h-screen">
-      <nav className="bg-gray-900 text-white px-6 py-4 flex justify-between items-center shadow-md">
-        <h1 className="text-xl font-bold">Agent Dashboard</h1>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                                <Avatar className="h-10 w-10 border border-muted">
+                                    <AvatarImage 
+                                    src={defaultAvatarUrl} 
+                                    alt={userFullName}
+                                />
+                                        <AvatarFallback className="bg-primary/10 text-primary">
+                                            {userFullName ? userFullName.charAt(0).toUpperCase() : '@'}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <ChevronDown className="h-4 w-4 absolute bottom-0 right-0 bg-background rounded-full p-0.5 border" />
+                                </Button>
+                            </DropdownMenuTrigger>
 
-        <div className="relative">
-          <button 
-            onClick={() => setDropdownOpen(!dropdownOpen)} 
-            className="flex items-center space-x-2 focus:outline-none"
-          >
-            <Avatar className="w-10 h-10">
-              <AvatarFallback className="bg-gray-700 text-white font-bold">
-                {getProfileLetter(userEmail)}
-              </AvatarFallback>
-            </Avatar>
-            <ChevronDown 
-              className={`w-5 h-5 transition-transform duration-300 ${
-                dropdownOpen ? 'rotate-180' : ''
-              }`} 
-            />
-          </button>
+                            <DropdownMenuContent className="w-64" align="end">
+                                <div className="flex items-center p-3 pb-2 gap-3">
+                                    <Avatar className="h-10 w-10 border border-muted">
+                                        <AvatarImage 
+                                        src={userAvatarUrl} 
+                                        alt={userFullName}
+                                    />
+                                            <AvatarFallback className="bg-primary/10 text-primary">
+                                                {userFullName ? userFullName.charAt(0).toUpperCase() : '@'}
+                                            </AvatarFallback>
+                                        </Avatar>
 
-          {dropdownOpen && (
-            <div className="absolute right-0 mt-2 min-w-[200px] max-w-[260px] bg-white text-gray-900 shadow-lg rounded-lg border border-gray-300 py-4 px-5">
-              <div className="flex items-center space-x-2">
-                <span className="w-2 h-2 bg-gray-600 rounded-full"></span>
-                <p className="text-sm font-medium truncate" title={userEmail}>
-                  {userEmail}
-                </p>
-              </div>
+                                        <div className="flex flex-col space-y-0.5">
+                                            <p className="text-sm font-medium line-clamp-1">{userFullName}</p>
+                                            <p className="text-xs text-muted-foreground line-clamp-1">{userEmail}</p>
+                                        </div>
+                                    </div>
 
-              <div className="flex items-center space-x-2 mt-1">
-                <span className="w-2 h-2 bg-gray-600 rounded-full"></span>
-                <p className="text-sm font-medium text-gray-500">{userRole}</p>
-              </div>
+                                    <div className="px-3 pb-2">
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                                            {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
+                                        </span>
+                                    </div>
 
-              <hr className="my-3 border-gray-300" />
+                                    <DropdownMenuSeparator />
 
-              <Button 
-                onClick={handleLogout} 
-                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md w-full"
-              >
-                Logout
-              </Button>
+                                    <DropdownMenuItem 
+                                    className="cursor-pointer py-2.5 px-3 gap-2 text-destructive focus:text-destructive"
+                                    onClick={handleLogout}
+                                    >
+                                    <LogOut className="h-4 w-4" />
+                                    <span>Log out</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                </header>
             </div>
-          )}
-        </div>
-      </nav>
-    </div>
-  );
+    );
 };
 
 export default AgentDashboard;
