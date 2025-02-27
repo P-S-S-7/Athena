@@ -1,39 +1,45 @@
-import { useState, useEffect } from "react";
+import { use, useEffect } from "react";
+import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { ToastContainer, showErrorToast, showSuccessToast } from "@/utils/toast";
 
 const Login = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const error = new URLSearchParams(location.search).get("error");
+    const status = new URLSearchParams(location.search).get("status");
 
     useEffect(() => {
-        const userRole = document.cookie
-            .split("; ")
-            .find((row) => row.startsWith("user_role="));
-
-        if (userRole) {
-            const role = userRole.split("=")[1];
-            navigate(role === "admin" ? "/admin_dashboard" : "/agent_dashboard");
+        if (status === "success") {
+            axios.get(`${import.meta.env.VITE_API_URL}/users/role`, { withCredentials: true })
+                .then((response) => {
+                    const role = response.data.role;
+                    const destination = role === "admin"
+                        ? "/admin_dashboard?welcome=true"
+                        : "/agent_dashboard?welcome=true";
+                    navigate(destination);
+                })
+                .catch(() => {
+                    showErrorToast("Failed to fetch user role. Please try again.");
+                });
         }
-    }, [navigate]);
+    }, [status, navigate]);
 
     useEffect(() => {
         if (error) {
-            toast.error(getErrorMessage(error), {
-                position: "top-center",
-                autoClose: 3000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                progress: undefined,
-            });
+            showErrorToast(getErrorMessage(error));
         }
     }, [error]);
+
+    useEffect(() => {
+        if (status === "logout") {
+            showSuccessToast("You have been successfully logged out.");
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+        }
+    }, [status]);
 
     const handleGoogleLogin = () => {
         window.location.href = `${import.meta.env.VITE_API_URL}/users/auth/google_oauth2`;
@@ -46,7 +52,7 @@ const Login = () => {
             case "google_auth_failed":
                 return "Google authentication failed. Please try again.";
             default:
-                return "";
+                return "An error occurred during login. Please try again.";
         }
     };
 
@@ -62,22 +68,22 @@ const Login = () => {
                 </h2>
                 <div className="flex justify-center mb-4">
                     <Button
-                    className="flex items-center gap-2 bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-gray-900 transition"
-                    onClick={handleGoogleLogin}
+                        className="flex items-center gap-2 bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-gray-900 transition"
+                        onClick={handleGoogleLogin}
                     >
-                    <img
-                    src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-                    alt="Google logo"
-                    className="w-5"
-                />
+                        <img
+                            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                            alt="Google logo"
+                            className="w-5"
+                        />
                         Sign in with Google
-                </Button>
-            </div>
-            <div className="text-center text-xs mt-4 p-2 rounded bg-gray-200 text-gray-700">
-                🔒 Secure authentication powered by Google OAuth 2.0
-            </div>
-        </Card>
-    </div>
+                    </Button>
+                </div>
+                <div className="text-center text-xs mt-4 p-2 rounded bg-gray-200 text-gray-700">
+                    🔒 Secure authentication powered by Google OAuth 2.0
+                </div>
+            </Card>
+        </div>
     );
 };
 

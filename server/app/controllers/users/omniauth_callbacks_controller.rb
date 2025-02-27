@@ -4,11 +4,11 @@ class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
 
         if user.present?
             sign_out_all_scopes
-            sign_in_and_redirect user, event: :authentication
-            cookies[:user_email] = user.email
-            cookies[:user_full_name] = user.full_name
-            cookies[:user_avatar_url] = user.avatar_url
-            cookies[:user_role] = user.role
+            sign_in user
+
+            cookies[:user_id] = { value: user.uid, httponly: true, secure: true, same_site: :strict }
+
+            redirect_to "#{ENV['FRONTEND_URL']}/login?status=success"
         else
             redirect_to "#{ENV['FRONTEND_URL']}/login?error=unauthorized"
         end
@@ -19,11 +19,6 @@ class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
     end
 
     protected
-
-    def after_sign_in_path_for(resource)
-        return "#{ENV['FRONTEND_URL']}/admin_dashboard" if resource.admin?
-    "#{ENV['FRONTEND_URL']}/agent_dashboard"
-    end
 
     def after_omniauth_failure_path_for(scope)
     "#{ENV['FRONTEND_URL']}/login?error=google_auth_failed"

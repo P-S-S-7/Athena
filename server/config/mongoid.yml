@@ -1,0 +1,33 @@
+development:
+  clients:
+    default:
+      database: auth_athena_mongodb_development
+      hosts:
+        - localhost:27017
+      options:
+        server_selection_timeout: 5
+  options:
+    raise_not_found_error: false
+    use_utc: true
+        
+test:
+  clients:
+    default:
+      database: auth_athena_mongodb__test
+      hosts:
+        - localhost:27017
+      options:
+        server_selection_timeout: 5
+  options:
+    raise_not_found_error: false
+    use_utc: true
+
+production:
+  clients:
+    default:
+      uri: <%= ENV['MONGODB_URI'] %>
+      options:
+        server_selection_timeout: 5
+  options:
+    raise_not_found_error: false
+    use_utc: true

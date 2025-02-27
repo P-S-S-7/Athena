@@ -11,7 +11,8 @@ const useLogout = () => {
                 {},
                 { withCredentials: true }
             );
-            navigate('/login');
+            localStorage.removeItem('welcomeShown');
+            navigate('/login?status=logout');
         } catch (error) {
             console.error('Logout failed:', error);
         }

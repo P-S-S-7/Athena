@@ -84,6 +84,7 @@ GEM
     bigdecimal (3.1.9)
     bootsnap (1.18.4)
       msgpack (~> 1.2)
+    bson (5.0.2)
     builder (3.3.0)
     concurrent-ruby (1.3.5)
     connection_pool (2.5.0)
@@ -135,6 +136,12 @@ GEM
     marcel (1.0.4)
     mini_mime (1.1.5)
     minitest (5.25.4)
+    mongo (2.21.0)
+      bson (>= 4.14.1, < 6.0.0)
+    mongoid (9.0.6)
+      activemodel (>= 5.1, < 8.1, != 7.0.0)
+      concurrent-ruby (>= 1.0.5, < 2.0)
+      mongo (>= 2.18.0, < 3.0.0)
     msgpack (1.8.0)
     multi_xml (0.7.1)
       bigdecimal (~> 3.1)
@@ -286,6 +293,7 @@ DEPENDENCIES
   debug
   devise
   dotenv-rails
+  mongoid
   mysql2
   omniauth
   omniauth-google-oauth2
