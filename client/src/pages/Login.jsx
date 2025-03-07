@@ -1,31 +1,41 @@
-import { use, useEffect } from "react";
-import axios from "axios";
+import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ToastContainer, showErrorToast, showSuccessToast } from "@/utils/toast";
+import { useAuth } from '../contexts/AuthContext';
 
 const Login = () => {
     const location = useLocation();
     const navigate = useNavigate();
+    const { user, fetchUserProfile } = useAuth();
     const error = new URLSearchParams(location.search).get("error");
     const status = new URLSearchParams(location.search).get("status");
 
     useEffect(() => {
+        if (user) {
+            if (user.role === "admin") {
+                navigate("/admin_dashboard");
+            } else if (user.role === "agent") {
+                navigate("/agent_dashboard");
+            }
+        }
+    }, [user, navigate]);
+
+    useEffect(() => {
         if (status === "success") {
-            axios.get(`${import.meta.env.VITE_API_URL}/users/role`, { withCredentials: true })
-                .then((response) => {
-                    const role = response.data.role;
-                    const destination = role === "admin"
+            fetchUserProfile().then((userData) => {
+                if (userData) {
+                    const destination = userData.role === "admin"
                         ? "/admin_dashboard?welcome=true"
                         : "/agent_dashboard?welcome=true";
                     navigate(destination);
-                })
-                .catch(() => {
-                    showErrorToast("Failed to fetch user role. Please try again.");
-                });
+                } else {
+                    showErrorToast("Failed to fetch user profile. Please try again.");
+                }
+            });
         }
-    }, [status, navigate]);
+    }, [status, navigate, fetchUserProfile]);
 
     useEffect(() => {
         if (error) {
@@ -35,7 +45,10 @@ const Login = () => {
 
     useEffect(() => {
         if (status === "logout") {
-            showSuccessToast("You have been successfully logged out.");
+            setTimeout(() => {
+                showSuccessToast("You have been successfully logged out.");
+            }, 100);
+
             const newUrl = window.location.pathname;
             window.history.replaceState({}, document.title, newUrl);
         }
@@ -61,7 +74,7 @@ const Login = () => {
             <ToastContainer />
             <Card className="w-full max-w-md p-8 shadow-lg rounded-lg border border-gray-300 bg-white">
                 <div className="text-center">
-                    <img src="Logo.jpg" alt="Logo" className="w-40 mx-auto" />
+                    <img src="/Logo.jpg" alt="Logo" className="w-40 mx-auto" />
                 </div>
                 <h2 className="text-center text-xl font-semibold text-gray-800 mb-4">
                     Sign in to your account

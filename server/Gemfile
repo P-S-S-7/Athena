@@ -52,3 +52,6 @@ gem 'omniauth-google-oauth2'
 gem "omniauth-rails_csrf_protection"
 gem 'rack-cors'
 gem 'dotenv-rails'
+
+gem 'httparty'
+gem 'multipart-post'
