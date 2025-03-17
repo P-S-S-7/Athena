@@ -7,14 +7,15 @@ import {
     Reply, FileText, Forward, Check,
     Merge, Trash2, BarChart, Globe, Ticket, Download, PaperclipIcon,
     Mail, Phone, MessageSquare, X, UserCircle, MessageCircle, Bot,
-    Settings, ShoppingCart, MessagesSquare, ArrowLeft
+    Settings, ShoppingCart, MessagesSquare, ArrowLeft,
+    User
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { showErrorToast, showSuccessToast, ToastContainer } from '@/utils/toast';
+import { ToastContainer, showSuccessToast } from '@/utils/toast';
 import { sourceMap, contactMap, contactEmailMap, agentMap } from '@/utils/freshdeskMappings';
 import Sidebar from '@/utils/Sidebar';
 import Header from '@/utils/Header';
@@ -23,6 +24,9 @@ import AddReply from './ticketDetailComponents/AddReply';
 import AddNote from './ticketDetailComponents/AddNote';
 import ForwardTicket from './ticketDetailComponents/ForwardTicket';
 import TicketProperties from './ticketDetailComponents/TicketProperties';
+import { ErrorProvider, useError } from '@/contexts/ErrorContext';
+import MergeTicketDialog from './ticketDetailComponents/MergeTicketDialog';
+import EditTicketDialog from './ticketDetailComponents/EditTicketDialog';
 
 const formatDate = (dateString) => {
     if (!dateString) return 'Not set';
@@ -30,7 +34,6 @@ const formatDate = (dateString) => {
         const date = parseISO(dateString);
         return format(date, 'MMM d, yyyy h:mm a');
     } catch (error) {
-        console.error("Error formatting date:", error);
         return 'Invalid date';
     }
 };
@@ -75,11 +78,12 @@ const getLargeSourceIcon = (source) => {
     }
 };
 
-const TicketDetails = () => {
+const TicketDetailsContent = () => {
     const { ticketId } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
     const actionFormRef = useRef(null);
+    const { handleError } = useError();
 
     const [loading, setLoading] = useState(true);
     const [ticket, setTicket] = useState(null);
@@ -88,6 +92,7 @@ const TicketDetails = () => {
     const [isUpdating, setIsUpdating] = useState(false);
     const [error, setError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
 
     const refreshData = () => {
         setRefreshKey(prevKey => prevKey + 1);
@@ -116,21 +121,20 @@ const TicketDetails = () => {
                         setConversations([]);
                     }
                 } catch (convError) {
-                    console.error('Error fetching conversations:', convError);
+                    handleError(convError);
                     setConversations([]);
                 }
 
             } catch (error) {
-                console.error('Error fetching ticket details:', error);
+                handleError(error);
                 setError('Failed to load ticket details');
-                showErrorToast('Failed to load ticket details');
             } finally {
                 setLoading(false);
             }
         };
 
         fetchTicketData();
-    }, [ticketId, refreshKey]);
+    }, [ticketId, refreshKey, handleError]);
 
     useEffect(() => {
         if (replyType && actionFormRef.current) {
@@ -174,15 +178,31 @@ const TicketDetails = () => {
                     break;
 
                 case 'merge':
-                    showErrorToast('Merge functionality not implemented yet');
+                    setIsMergeDialogOpen(true);
                     break;
 
                 default:
                     break;
             }
         } catch (error) {
-            console.error(`Error performing action ${action}:`, error);
-            showErrorToast(`Failed to ${action} ticket`);
+            handleError(error);
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    const handleMergeTickets = async (secondaryTicketIds) => {
+        try {
+            setIsUpdating(true);
+            await ticketService.mergeTickets(ticketId, secondaryTicketIds);
+            setTimeout(() => {
+                setIsMergeDialogOpen(false);
+                showSuccessToast('Tickets merged successfully');
+            }, 1000);
+            refreshData();
+        } catch (error) {
+            handleError(error);
+            throw error;
         } finally {
             setIsUpdating(false);
         }
@@ -247,6 +267,7 @@ const TicketDetails = () => {
             case 'note':
                 return <AddNote
                     ticketId={ticketId}
+                    user={user}
                     onSuccess={() => {
                         refreshData();
                         setReplyType(null);
@@ -308,6 +329,10 @@ const TicketDetails = () => {
                         >
                             <Forward className="h-4 w-4" /> Forward
                         </Button>
+                        <EditTicketDialog
+                            ticket={ticket}
+                            onSuccess={refreshData}
+                        />
                         <Button
                             variant="outline"
                             size="sm"
@@ -352,7 +377,7 @@ const TicketDetails = () => {
                                     {getLargeSourceIcon(ticket.source)}
                                     <h1 className="text-xl font-medium ml-3">{ticket.subject}</h1>
                                 </div>
-                                {ticket.responder_id &&(sourceMap[ticket.source] === 'Portal' || sourceMap[ticket.source] === 'Phone') && (
+                                {ticket.responder_id && (sourceMap[ticket.source] === 'Portal' || sourceMap[ticket.source] === 'Phone') && (
                                     <h3 className="text-sm text-gray-600 ml-12 -mt-6 -mb-4">
                                         Created by {ticket.responder_id && <span className="text-gray-800 font-medium">{agentMap[ticket.responder_id] || "Agent"}</span>}
                                     </h3>
@@ -428,6 +453,7 @@ const TicketDetails = () => {
                             <TicketConversations
                                 conversations={conversations}
                                 ticketId={ticketId}
+                                user={user}
                                 onRefresh={refreshData}
                             />
                             <div ref={actionFormRef} className="mt-4">
@@ -508,7 +534,21 @@ const TicketDetails = () => {
                     </div>
                 </main>
             </div>
+            <MergeTicketDialog
+                isOpen={isMergeDialogOpen}
+                onClose={() => setIsMergeDialogOpen(false)}
+                primaryTicket={ticket}
+                onMerge={handleMergeTickets}
+            />
         </div>
+    );
+};
+
+const TicketDetails = () => {
+    return (
+        <ErrorProvider>
+            <TicketDetailsContent />
+        </ErrorProvider>
     );
 };
 

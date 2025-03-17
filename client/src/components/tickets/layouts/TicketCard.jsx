@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -14,8 +13,9 @@ import { formatDistanceToNow, isPast } from "date-fns";
 import { contactMap } from "@/utils/freshdeskMappings";
 import ticketService from "@/services/ticketService";
 import groupService from "@/services/groupService";
-import { showSuccessToast, showErrorToast } from "@/utils/toast";
+import { showSuccessToast } from "@/utils/toast";
 import { useNavigate } from "react-router-dom";
+import { useError } from "@/contexts/ErrorContext";
 
 const TicketCard = ({
     ticket: initialTicket,
@@ -37,6 +37,7 @@ const TicketCard = ({
         group_id: false,
         responder_id: false,
     });
+    const { handleError } = useError();
 
     useEffect(() => {
         const fetchGroupAgents = async (groupId) => {
@@ -51,16 +52,15 @@ const TicketCard = ({
                     }, {});
                     setAvailableAgents(filteredAgents);
                 } catch (error) {
-                    console.error("Error fetching group agents:", error);
+                    handleError(error);
                     setAvailableAgents({});
                 }
             } else {
                 setAvailableAgents(agents);
             }
         };
-
         fetchGroupAgents(ticket.group_id);
-    }, [ticket.group_id]);
+    }, [ticket.group_id, agents, handleError]);
 
     const isOverdue = ticket.due_by && isPast(new Date(ticket.due_by));
     const isNew = ticket.created_at && new Date(ticket.created_at) >= new Date(Date.now() - 1000 * 60 * 60 * 24);
@@ -68,31 +68,29 @@ const TicketCard = ({
 
     const updateTicket = async (fieldName, value) => {
         setIsUpdating(prev => ({ ...prev, [fieldName]: true }));
-
         try {
             const ticketData = { [fieldName]: value };
-
             if ((fieldName === 'group_id' || fieldName === 'responder_id') && value === "None") {
                 ticketData[fieldName] = null;
             }
-
             if (typeof value === "string" && value !== "None") {
                 ticketData[fieldName] = parseInt(value, 10);
             }
-
-            const response = await ticketService.updateTicket(ticket.id, ticketData);
-
+            try {
+                await ticketService.updateTicket(ticket.id, ticketData);
+            }
+            catch (error) {
+                handleError(error);
+                return;
+            }
             const updatedTicket = { ...ticket, ...ticketData };
             setTicket(updatedTicket);
-
             if (onTicketUpdate) {
                 onTicketUpdate(updatedTicket);
             }
-
             showSuccessToast("Ticket updated successfully");
         } catch (error) {
-            console.error("Error updating ticket:", error);
-            showErrorToast("Failed to update ticket");
+            handleError(error);
         } finally {
             setIsUpdating(prev => ({ ...prev, [fieldName]: false }));
         }
@@ -125,53 +123,40 @@ const TicketCard = ({
     };
 
     return (
-        <Card
-            className={`mb-3 hover:border-blue-400 transition-transform duration-200 ${selected ? "border-blue-600 shadow-lg" : "border border-gray-300 shadow-md"} ${isClosed ? "opacity-70 grayscale" : ""}`}
+        <div
+            className={`
+                transition-transform duration-200 rounded-lg border
+                ${selected ? "border-blue-600 shadow-lg" : "border-gray-300 shadow-md"}
+                ${isClosed ? "opacity-70 grayscale" : "hover:border-blue-400"}
+            `}
         >
-            <div className="p-4">
-                <div className="flex items-center justify-between mb-2">
+            <div className="p-2">
+                <div className="flex items-center justify-between">
                     <div className="flex items-center">
-                        <Checkbox
-                            checked={selected}
-                            onCheckedChange={onSelect}
-                            className="mr-3 h-5 w-5"
-                        />
-                        <span className="text-sm font-semibold text-gray-700" onClick={(e) => navigateToTicketDetails(e, ticket.id)}>
-                            {ticket.subject.length > 80 ? `${ticket.subject.substring(0, ticket.subject.lastIndexOf(' ', 80))}...` : ticket.subject} #{ticket.id}
+                        <Checkbox checked={selected} onCheckedChange={onSelect} className="mr-2 h-5 w-5" />
+                        <span className="text-sm font-semibold text-gray-700 cursor-pointer" onClick={(e) => navigateToTicketDetails(e, ticket.id)}>
+                            {ticket.subject.length > 60 ? `${ticket.subject.substring(0, ticket.subject.lastIndexOf(' ', 60))}...` : ticket.subject} #{ticket.id}
                         </span>
                     </div>
-
-                    <div className="flex items-center justify-end space-x-1">
-                        {isNew && (
-                            <Badge className="text-[10px] py-1 px-2 rounded-md bg-green-200 text-green-900 hover:bg-green-300 transition-colors">
-                                New
-                            </Badge>
-                        )}
-                        {isOverdue && (
-                            <Badge className="text-[10px] py-1 px-2 rounded-md bg-red-200 text-red-900 hover:bg-red-300 transition-colors">
-                                Overdue
-                            </Badge>
-                        )}
+                    <div className="flex items-center space-x-1">
+                        {isNew && !isClosed && (<Badge className="text-[10px] py-0 px-1 rounded-md bg-green-200 text-green-900">New</Badge>)}
+                        {isOverdue && !isClosed && (<Badge className="text-[10px] py-0 px-1 rounded-md bg-red-200 text-red-900">Overdue</Badge>)}
                     </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 mb-3">
-                    <div className="flex items-center text-sm text-gray-600">
-                        <User className="mr-1.5 h-4 w-4" />
+                <div className="relative mt-2 text-sm text-gray-600 h-6">
+                    <div className="absolute left-0 flex items-center">
+                        <User className="mr-2 h-4 w-4" />
                         <span className="truncate">{contactMap[ticket.requester_id] || "Unknown"}</span>
                     </div>
-
-                    <div className="flex items-center text-sm text-gray-600">
-                        <Calendar className="mr-1.5 h-4 w-4" />
+                    <div className="absolute left-1/4 flex items-center">
+                        <Calendar className="mr-2 h-4 w-4" />
                         <span className="truncate">
-                            {"Created: "}
-                            {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
+                            Created: {formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true })}
                         </span>
                     </div>
-
-                    {ticket.due_by && (
-                        <div className="flex items-center text-sm col-span-2 mt-1">
-                            <Clock className={`mr-1.5 h-4 w-4 ${isOverdue ? "text-red-600" : "text-gray-500"}`} />
+                    {ticket.due_by && !isClosed && (
+                        <div className="absolute left-1/2 flex items-center">
+                            <Clock className={`mr-2 h-4 w-4 ${isOverdue ? "text-red-600" : "text-gray-500"}`} />
                             <span className={`truncate ${isOverdue ? "text-red-700" : "text-gray-600"}`}>
                                 {isOverdue ? "Overdue: " : "Due: "}
                                 {formatDistanceToNow(new Date(ticket.due_by), { addSuffix: true })}
@@ -179,120 +164,83 @@ const TicketCard = ({
                         </div>
                     )}
                 </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                <div className="flex items-center justify-between pt-1 mt-1 border-t border-gray-200">
                     <div>
-                        {ticket.source && (
-                            <Badge variant="outline" className="text-[10px] h-5 py-0 px-2 bg-gray-100">
-                                {sources[ticket.source] || "Unknown"}
-                            </Badge>
-                        )}
+                        {ticket.source && (<Badge variant="outline" className="text-[10px] h-5 py-0 px-1 bg-gray-100">{sources[ticket.source] || "Unknown"}</Badge>)}
                     </div>
-
-                    <div className="flex items-center space-x-2">
-                        <Select
-                            value={String(ticket.priority)}
-                            onValueChange={(value) => updateTicket('priority', value)}
-                            disabled={isUpdating.priority}
-                        >
-                            <SelectTrigger className={`w-28 h-8 text-sm min-h-0 py-1 ${getPriorityColor(ticket.priority)}`}>
-                                <SelectValue>
-                                    {isUpdating.priority ? "..." : priorities[ticket.priority]}
-                                </SelectValue>
+                    <div className="flex items-center space-x-1">
+                        <Select value={String(ticket.priority)} onValueChange={(value) => updateTicket('priority', value)} disabled={isUpdating.priority}>
+                            <SelectTrigger className={`w-24 h-7 text-sm min-h-0 py-0 ${getPriorityColor(ticket.priority)}`}>
+                                <SelectValue>{isUpdating.priority ? "..." : priorities[ticket.priority]}</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                                 {Object.entries(priorities).map(([key, value]) => (
-                                    <SelectItem key={key} value={key} className="text-xs">
-                                        {value}
-                                    </SelectItem>
+                                    <SelectItem key={key} value={key} className="text-xs">{value}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-
-                        <Select
-                            value={String(ticket.status)}
-                            onValueChange={(value) => updateTicket('status', value)}
-                            disabled={isUpdating.status}
-                        >
-                            <SelectTrigger className={`w-28 h-8 text-sm min-h-0 py-1 ${getStatusColor(ticket.status)}`}>
-                                <SelectValue>
-                                    {isUpdating.status ? "..." : statuses[ticket.status]}
-                                </SelectValue>
+                        <Select value={String(ticket.status)} onValueChange={(value) => updateTicket('status', value)} disabled={isUpdating.status}>
+                            <SelectTrigger className={`w-24 h-7 text-sm min-h-0 py-0 ${getStatusColor(ticket.status)}`}>
+                                <SelectValue>{isUpdating.status ? "..." : statuses[ticket.status]}</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                                 {Object.entries(statuses).map(([key, value]) => (
-                                    <SelectItem key={key} value={key} className="text-xs">
-                                        {value}
-                                    </SelectItem>
+                                    <SelectItem key={key} value={key} className="text-xs">{value}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-
-                        <Select
-                            value={ticket.group_id ? String(ticket.group_id) : "None"}
-                            onValueChange={(value) => {
-                                updateTicket('group_id', value);
-                                if (value !== "None") {
-                                    setAvailableAgents(currentAgents => ({
-                                        ...currentAgents,
-                                        responder_id: null
-                                    }));
-                                }
-                            }}
-                            disabled={isUpdating.group_id}
-                        >
-                            <SelectTrigger className="w-28 h-8 text-sm min-h-0 py-1">
+                        <Select value={ticket.group_id ? String(ticket.group_id) : "None"}
+                                onValueChange={(value) => {
+                                    updateTicket('group_id', value);
+                                    if (value !== "None") {
+                                        setAvailableAgents(currentAgents => ({
+                                            ...currentAgents,
+                                            responder_id: null
+                                        }));
+                                    }
+                                }}
+                                disabled={isUpdating.group_id}>
+                            <SelectTrigger className="w-24 h-7 text-sm min-h-0 py-0">
                                 <SelectValue>
                                     {isUpdating.group_id ? "..." :
-                                     (ticket.group_id ?
-                                      (groups[ticket.group_id]?.length > 10 ?
-                                       groups[ticket.group_id].substring(0, 10) + "..." :
-                                       groups[ticket.group_id]) :
-                                      "None")}
+                                    (ticket.group_id ?
+                                    (groups[ticket.group_id]?.length > 8 ?
+                                    groups[ticket.group_id].substring(0, 8) + "..." :
+                                    groups[ticket.group_id]) :
+                                    "None")}
                                 </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="None" className="text-xs">
-                                    None
-                                </SelectItem>
+                                <SelectItem value="None" className="text-xs">None</SelectItem>
                                 {Object.entries(groups).map(([key, value]) => (
-                                    <SelectItem key={key} value={key} className="text-xs">
-                                        {value}
-                                    </SelectItem>
+                                    <SelectItem key={key} value={key} className="text-xs">{value}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-
-                        <Select
-                            value={ticket.responder_id ? String(ticket.responder_id) : "None"}
-                            onValueChange={(value) => updateTicket('responder_id', value)}
-                            disabled={isUpdating.responder_id || Object.keys(availableAgents).length === 0}
-                        >
-                            <SelectTrigger className="w-28 h-8 text-sm min-h-0 py-1">
+                        <Select value={ticket.responder_id ? String(ticket.responder_id) : "None"}
+                                onValueChange={(value) => updateTicket('responder_id', value)}
+                                disabled={isUpdating.responder_id || Object.keys(availableAgents).length === 0}>
+                            <SelectTrigger className="w-24 h-7 text-sm min-h-0 py-0">
                                 <SelectValue>
                                     {isUpdating.responder_id ? "..." :
-                                     (ticket.responder_id ?
-                                      (availableAgents[ticket.responder_id]?.length > 10 ?
-                                       availableAgents[ticket.responder_id].substring(0, 10) + "..." :
-                                       availableAgents[ticket.responder_id]) :
-                                      "None")}
+                                    (ticket.responder_id ?
+                                    (availableAgents[ticket.responder_id]?.length > 8 ?
+                                    availableAgents[ticket.responder_id].substring(0, 8) + "..." :
+                                    availableAgents[ticket.responder_id]) :
+                                    "None")}
                                 </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="None" className="text-xs">
-                                    None
-                                </SelectItem>
+                                <SelectItem value="None" className="text-xs">None</SelectItem>
                                 {Object.entries(availableAgents).map(([key, value]) => (
-                                    <SelectItem key={key} value={key} className="text-xs">
-                                        {value}
-                                    </SelectItem>
+                                    <SelectItem key={key} value={key} className="text-xs">{value}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     </div>
                 </div>
             </div>
-        </Card>
+        </div>
     );
 };
 

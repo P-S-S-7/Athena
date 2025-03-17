@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { PaperclipIcon, Loader2 } from "lucide-react";
 import ticketService from "@/services/ticketService";
-import { showErrorToast, showSuccessToast, ToastContainer } from "../../utils/toast";
+import { showSuccessToast, ToastContainer } from "../../utils/toast";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
@@ -16,17 +16,21 @@ import groupService from "@/services/groupService";
 import { useAuth } from "../../contexts/AuthContext";
 import Sidebar from "../../utils/Sidebar";
 import Header from "../../utils/Header";
+import { ErrorProvider, useError } from "../../contexts/ErrorContext";
 
-const TicketCreate = () => {
+const TicketCreateContent = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { handleError } = useError();
+    const location = useLocation();
+
     const [ticketData, setTicketData] = useState({
         subject: "",
         description: "",
         status: "2",
         priority: "1",
         source: "2",
-        requester_id: null,
+        requester_id: location.state?.contactId ? String(location.state.contactId) : null,
         type: null,
         tags: []
     });
@@ -49,7 +53,7 @@ const TicketCreate = () => {
                     }, {});
                     setAvailableAgents(filteredAgents);
                 } catch (error) {
-                    console.error("Error fetching group agents:", error);
+                    handleError(error);
                     setAvailableAgents({});
                 }
             } else {
@@ -58,7 +62,7 @@ const TicketCreate = () => {
         };
 
         fetchGroupAgents();
-    }, [ticketData.group_id]);
+    }, [ticketData.group_id, handleError]);
 
     const handleChange = (field, value) => {
         if (value === null || value === "null") {
@@ -115,7 +119,13 @@ const TicketCreate = () => {
         e.preventDefault();
 
         if (!ticketData.subject || !ticketData.description || !ticketData.requester_id) {
-            showErrorToast("Subject, Description, and Contact are required.");
+            handleError(new Error("Subject, Description, and Contact are required."));
+            return;
+        }
+
+        const validSources = ["1", "2", "3", "5", "6", "7", "9", "10"];
+        if (!validSources.includes(ticketData.source)) {
+            handleError(new Error("Source value is invalid. Please select a valid source."));
             return;
         }
 
@@ -154,8 +164,7 @@ const TicketCreate = () => {
 
             navigate("/tickets");
         } catch (error) {
-            console.error("Error creating ticket:", error);
-            showErrorToast(`Failed to create ticket: ${error.message || "Unknown error"}`);
+            handleError(error);
         } finally {
             setLoading(false);
         }
@@ -331,9 +340,12 @@ const TicketCreate = () => {
                                             <SelectValue placeholder="Select source" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {Object.entries(sourceMap).map(([key, value]) => (
-                                                <SelectItem key={key} value={key}>{value}</SelectItem>
-                                            ))}
+                                            {Object.entries(sourceMap)
+                                                .filter(([key]) => ["1", "2", "3", "5", "6", "7", "9", "10"].includes(key))
+                                                .map(([key, value]) => (
+                                                    <SelectItem key={key} value={key}>{value}</SelectItem>
+                                                ))
+                                            }
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -409,7 +421,6 @@ const TicketCreate = () => {
                             </div>
 
                             <div className="flex justify-end space-x-2 pt-4">
-
                                 <Button
                                     type="button"
                                     variant="outline"
@@ -435,6 +446,14 @@ const TicketCreate = () => {
 
             <ToastContainer />
         </div>
+    );
+};
+
+const TicketCreate = () => {
+    return (
+        <ErrorProvider>
+            <TicketCreateContent />
+        </ErrorProvider>
     );
 };
 

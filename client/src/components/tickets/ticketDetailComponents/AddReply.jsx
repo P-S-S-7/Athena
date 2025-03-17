@@ -1,16 +1,27 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PaperclipIcon, Loader2, Reply } from 'lucide-react';
+import { PaperclipIcon, Loader2, Reply, FileText, Download } from 'lucide-react';
 import RichTextEditor from '@/utils/RichTextEditor';
-import { showErrorToast, showSuccessToast } from '@/utils/toast';
+import { showSuccessToast } from '@/utils/toast';
 import ticketService from '@/services/ticketService';
+import { useError } from '@/contexts/ErrorContext';
 
 const AddReply = ({ ticketId, onSuccess }) => {
+    const { handleError } = useError();
+    const editorRef = useRef(null);
     const [content, setContent] = useState('');
     const [attachments, setAttachments] = useState([]);
+    const [cannedResponseAttachments, setCannedResponseAttachments] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [hasCannedResponse, setHasCannedResponse] = useState(false);
+
+    useEffect(() => {
+        if (content.trim() && hasCannedResponse === false) {
+            setHasCannedResponse(true);
+        }
+    }, [content, hasCannedResponse]);
 
     const handleFileChange = (e) => {
         const files = Array.from(e.target.files);
@@ -21,33 +32,63 @@ const AddReply = ({ ticketId, onSuccess }) => {
         setAttachments(attachments.filter((_, i) => i !== index));
     };
 
+    const removeCannedResponseAttachment = (index) => {
+        setCannedResponseAttachments(cannedResponseAttachments.filter((_, i) => i !== index));
+    };
+
     const handleSubmit = async () => {
         if (!content.trim()) {
-            showErrorToast('Reply content cannot be empty');
+            handleError(new Error('Reply content cannot be empty'));
             return;
         }
 
         try {
             setIsSubmitting(true);
 
+            const downloadedAttachments = await Promise.all(
+                cannedResponseAttachments.map(async (attachment) => {
+                    try {
+                        const response = await fetch(attachment.attachment_url);
+                        const blob = await response.blob();
+                        return new File([blob], attachment.name, { type: attachment.content_type });
+                    } catch (error) {
+                        console.error(`Failed to download attachment ${attachment.name}:`, error);
+                        return null;
+                    }
+                })
+            );
+
+            const validDownloadedAttachments = downloadedAttachments.filter(file => file !== null);
+
+            const allAttachments = [...attachments, ...validDownloadedAttachments];
+
             await ticketService.addReply(
                 ticketId,
-                { body: content},
-                attachments
+                { body: content },
+                allAttachments
             );
 
             showSuccessToast('Reply added successfully');
             setContent('');
             setAttachments([]);
+            setCannedResponseAttachments([]);
+            setHasCannedResponse(false);
 
             if (onSuccess) {
                 onSuccess();
             }
         } catch (error) {
-            console.error('Error adding reply:', error);
-            showErrorToast('Failed to add reply');
+            handleError(error);
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleContentChange = (newContent) => {
+        setContent(newContent);
+
+        if (newContent.trim() && !content.trim()) {
+            setHasCannedResponse(true);
         }
     };
 
@@ -57,9 +98,12 @@ const AddReply = ({ ticketId, onSuccess }) => {
 
             <RichTextEditor
                 id="replyBox"
+                ref={editorRef}
                 value={content}
-                onChange={setContent}
+                onChange={handleContentChange}
                 className="min-h-[150px] mb-4"
+                onCannedResponseAttachmentsChange={setCannedResponseAttachments}
+                onCannedResponseInserted={setHasCannedResponse}
             />
 
             <div className="mb-4">
@@ -77,10 +121,10 @@ const AddReply = ({ ticketId, onSuccess }) => {
 
                 {attachments.length > 0 && (
                     <div className="mt-2">
-                        <h4 className="text-sm font-medium">Attached Files:</h4>
+                        <h4 className="text-sm font-medium">Your Attachments:</h4>
                         <ul className="mt-1 space-y-1">
                             {attachments.map((file, index) => (
-                                <li key={index} className="flex items-center justify-between text-sm">
+                                <li key={`manual-${index}`} className="flex items-center justify-between text-sm">
                                     <div className="flex items-center">
                                         <PaperclipIcon className="h-4 w-4 mr-2 text-gray-400" />
                                         <span>{file.name} ({(file.size / 1024).toFixed(2)} KB)</span>
@@ -94,6 +138,49 @@ const AddReply = ({ ticketId, onSuccess }) => {
                                     >
                                         Remove
                                     </Button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
+                {cannedResponseAttachments.length > 0 && (
+                    <div className="mt-4">
+                        <h4 className="text-sm font-medium">Canned Response Attachments:</h4>
+                        <ul className="mt-1 space-y-1">
+                            {cannedResponseAttachments.map((attachment, index) => (
+                                <li
+                                    key={`canned-${index}`}
+                                    className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-gray-50"
+                                >
+                                    <div className="flex items-center overflow-hidden">
+                                        <FileText className="h-4 w-4 mr-2 text-blue-500 flex-shrink-0" />
+                                        <span className="truncate">{attachment.name}</span>
+                                        <span className="ml-1 text-gray-500">
+                                            ({(attachment.size / 1024).toFixed(2)} KB)
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Button
+                                            as="a"
+                                            href={attachment.attachment_url}
+                                            target="_blank"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-blue-500"
+                                        >
+                                            <Download className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => removeCannedResponseAttachment(index)}
+                                            className="text-red-500"
+                                        >
+                                            Remove
+                                        </Button>
+                                    </div>
                                 </li>
                             ))}
                         </ul>

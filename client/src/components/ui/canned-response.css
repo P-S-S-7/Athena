@@ -1,0 +1,46 @@
+/* src/components/ui/canned-response.css */
+.canned-response-folder {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.canned-response-folder:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.canned-response-item {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.canned-response-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Add to RichTextEditor.css */
+.editor-btn.canned-responses {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  width: auto;
+}
+
+.color-btn {
+  position: relative;
+  border: 1px solid #e2e8f0;
+}
+
+.color-btn .color-preview {
+  position: absolute;
+  inset: 2px;
+  border-radius: 4px;
+}
+
+.color-label {
+  font-size: 10px;
+  margin-top: 2px;
+  display: block;
+  text-align: center;
+  color: #64748b;
+}

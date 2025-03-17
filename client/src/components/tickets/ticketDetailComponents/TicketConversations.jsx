@@ -36,19 +36,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import RichTextEditor from '@/utils/RichTextEditor';
 import ticketService from '@/services/ticketService';
-import { showErrorToast, showSuccessToast } from '@/utils/toast';
-
-const formatDate = (dateString) => {
-    if (!dateString) return 'Not set';
-    try {
-        const date = parseISO(dateString);
-        const estDate = subHours(date, 5);
-        return format(estDate, 'MMM d, yyyy h:mm a');
-    } catch (error) {
-        console.error("Error formatting date:", error);
-        return 'Invalid date';
-    }
-};
+import { showSuccessToast } from '@/utils/toast';
+import { useError } from '@/contexts/ErrorContext';
 
 const formatRelativeTime = (dateString) => {
     if (!dateString) return '';
@@ -73,7 +62,8 @@ const stripRTLDirectives = (html) => {
     return html.replace(/dir="(rtl|ltr)"/gi, '');
 };
 
-const TicketConversations = ({ conversations = [], ticketId, onRefresh }) => {
+const TicketConversations = ({ conversations = [], ticketId, user, onRefresh }) => {
+    const { handleError } = useError();
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -82,6 +72,7 @@ const TicketConversations = ({ conversations = [], ticketId, onRefresh }) => {
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [editTarget, setEditTarget] = useState(null);
     const [editContent, setEditContent] = useState('');
+    const [headerText, setHeaderText] = useState('');
     const [editingAttachments, setEditingAttachments] = useState([]);
     const [newAttachments, setNewAttachments] = useState([]);
     const [isEditing, setIsEditing] = useState(false);
@@ -146,7 +137,22 @@ const TicketConversations = ({ conversations = [], ticketId, onRefresh }) => {
 
     const handleEditClick = (conversation) => {
         setEditTarget(conversation);
-        const cleanContent = stripRTLDirectives(conversation.body || conversation.body_text || '');
+
+        let cleanContent = stripRTLDirectives(conversation.body || conversation.body_text || '');
+
+        setHeaderText(`Edited by ${user.email}`);
+
+        cleanContent = cleanContent.replace(
+            /<div class="non-editable-header">.*?<\/div>/s,
+            ''
+        ).replace(
+            /Created by .*?/s,
+            ''
+        ).replace(
+            /Edited by .*?/s,
+            ''
+        ).trim();
+
         setEditContent(cleanContent);
         setEditingAttachments(conversation.attachments || []);
         setNewAttachments([]);
@@ -163,8 +169,7 @@ const TicketConversations = ({ conversations = [], ticketId, onRefresh }) => {
             showSuccessToast(`${deleteTarget.source === 2 ? 'Note' : 'Reply'} deleted successfully`);
             if (onRefresh) onRefresh();
         } catch (error) {
-            console.error("Error deleting conversation:", error);
-            showErrorToast(`Failed to delete: ${error.message || 'Unknown error'}`);
+            handleError(error);
         } finally {
             setIsDeleting(false);
             setDeleteDialogOpen(false);
@@ -186,10 +191,10 @@ const TicketConversations = ({ conversations = [], ticketId, onRefresh }) => {
 
         setIsEditing(true);
         try {
-            const finalContent = stripRTLDirectives(editContent);
+            const fullContent = `<div class="non-editable-header"><p>${headerText}</p><hr/></div>${editContent}`;
 
             const formData = new FormData();
-            formData.append('body', finalContent);
+            formData.append('body', fullContent);
 
             if (newAttachments.length > 0) {
                 newAttachments.forEach((file, index) => {
@@ -203,13 +208,13 @@ const TicketConversations = ({ conversations = [], ticketId, onRefresh }) => {
 
             if (onRefresh) onRefresh();
         } catch (error) {
-            console.error("Error updating note:", error);
-            showErrorToast(`Failed to update: ${error.message || 'Unknown error'}`);
+            handleError(error);
         } finally {
             setIsEditing(false);
             setEditDialogOpen(false);
             setEditTarget(null);
             setEditContent('');
+            setHeaderText('');
             setEditingAttachments([]);
             setNewAttachments([]);
         }
@@ -510,6 +515,11 @@ const TicketConversations = ({ conversations = [], ticketId, onRefresh }) => {
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
+                        <div className="mb-3 p-2 bg-gray-100 rounded-lg">
+                            <p className="font-medium text-gray-700">{headerText}</p>
+                            <div className="my-2 border-t border-gray-300"></div>
+                        </div>
+
                         <div className="space-y-2">
                             <RichTextEditor
                                 value={editContent}

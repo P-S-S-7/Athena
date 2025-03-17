@@ -9,10 +9,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { format, parseISO, addHours, isAfter } from 'date-fns';
 import { Edit, X, Plus, Calendar } from 'lucide-react';
-import { showErrorToast, showSuccessToast } from '@/utils/toast';
+import { showSuccessToast } from '@/utils/toast';
 import { statusMap, priorityMap, typeArray, agentMap, groupMap } from '@/utils/freshdeskMappings';
 import ticketService from '@/services/ticketService';
 import groupService from '@/services/groupService';
+import { useError } from '@/contexts/ErrorContext';
 
 const formatDate = (dateString) => {
     if (!dateString) return 'Not set';
@@ -36,6 +37,7 @@ const isDueDatePassed = (dateString) => {
 };
 
 const TicketProperties = ({ ticket, isTicketClosed, onRefresh }) => {
+    const { handleError } = useError();
     const [editingResolutionDue, setEditingResolutionDue] = useState(false);
     const [ticketProperties, setTicketProperties] = useState({
         status: '',
@@ -94,7 +96,7 @@ const TicketProperties = ({ ticket, isTicketClosed, onRefresh }) => {
 
                     setAvailableAgents(filteredAgents);
                 } catch (error) {
-                    console.error("Error fetching group agents:", error);
+                    handleError(error);
                     setAvailableAgents({});
                 }
             } else {
@@ -103,7 +105,7 @@ const TicketProperties = ({ ticket, isTicketClosed, onRefresh }) => {
         };
 
         fetchGroupAgents();
-    }, [ticketProperties.group_id]);
+    }, [ticketProperties.group_id, handleError]);
 
     const isPropertiesChanged = () => {
         return JSON.stringify(ticketProperties) !== JSON.stringify(originalProperties);
@@ -148,8 +150,7 @@ const TicketProperties = ({ ticket, isTicketClosed, onRefresh }) => {
                 onRefresh();
             }
         } catch (error) {
-            console.error('Error updating ticket properties:', error);
-            showErrorToast('Failed to update ticket properties');
+            handleError(error);
         } finally {
             setIsUpdating(false);
         }
@@ -157,7 +158,7 @@ const TicketProperties = ({ ticket, isTicketClosed, onRefresh }) => {
 
     const handleUpdateResolutionDue = async () => {
         if (!resolutionDate) {
-            showErrorToast('Please select a date');
+            handleError(new Error('Please select a date'));
             return;
         }
 
@@ -173,15 +174,14 @@ const TicketProperties = ({ ticket, isTicketClosed, onRefresh }) => {
                 due_by: localDueDate.toISOString()
             });
 
-            showSuccessToast('Resolution due date updated successfully');
+            setTimeout(() => showSuccessToast('Resolution due date updated successfully'), 1000);
             setEditingResolutionDue(false);
 
             if (onRefresh) {
                 onRefresh();
             }
         } catch (error) {
-            console.error('Error updating resolution due date:', error);
-            showErrorToast('Failed to update resolution due date');
+            handleError(error);
         } finally {
             setIsUpdating(false);
         }

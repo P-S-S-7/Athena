@@ -1,27 +1,28 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import TicketsList from "../components/tickets/TicketsList";
-import { PlusIcon, ClipboardListIcon } from "lucide-react";
+import ContactsList from "../components/contacts/ContactsList";
+import { PlusIcon, UserIcon } from "lucide-react";
 import { ToastContainer } from "@/utils/toast";
 import Sidebar from "../utils/Sidebar";
 import Header from "../utils/Header";
 import { useAuth } from '../contexts/AuthContext';
-import ticketService from "@/services/ticketService";
+import contactService from "@/services/contactService";
 import { ErrorProvider, useError } from "../contexts/ErrorContext";
 
-const TicketManagementContent = () => {
+const ContactManagementContent = () => {
     const [refresh, setRefresh] = useState(false);
     const [count, setCount] = useState(0);
+    const location = useLocation();
     const navigate = useNavigate();
     const { user } = useAuth();
     const { handleError } = useError();
 
     useEffect(() => {
-        const fetchTicketCount = async () => {
+        const fetchContactCount = async () => {
             try {
-                const val = await ticketService.getTicketCount();
+                const val = await contactService.getContactCount();
                 setCount(val.count);
             } catch (error) {
                 handleError(error);
@@ -30,12 +31,22 @@ const TicketManagementContent = () => {
                 }
             }
         };
-        fetchTicketCount();
+        fetchContactCount();
     }, [refresh, navigate, handleError]);
 
     const handleRefresh = () => {
         setRefresh(prev => !prev);
     };
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('refresh') === 'true') {
+            setTimeout(() => {
+                handleRefresh();
+                navigate('/contacts', { replace: true });
+            }, 100);
+        }
+    }, [location.search, navigate, handleRefresh]);
 
     if (!user) return null;
 
@@ -45,7 +56,7 @@ const TicketManagementContent = () => {
 
             <div className="flex flex-col flex-grow">
                 <Header
-                    title="Ticket Management"
+                    title="Contact Management"
                     userRole={user.role}
                     userEmail={user.email}
                     userFullName={user.full_name}
@@ -54,14 +65,14 @@ const TicketManagementContent = () => {
 
                 <main className="flex-grow p-6 overflow-auto">
                     <div className="mb-6 flex justify-between items-center">
-                        <Button onClick={() => navigate("/tickets/new")}>
-                            <PlusIcon className="mr-2 h-4 w-4" /> New Ticket
+                        <Button onClick={() => navigate("/contacts/new")}>
+                            <PlusIcon className="mr-2 h-4 w-4" /> New Contact
                         </Button>
 
                         <div className="relative flex items-center">
-                            <ClipboardListIcon className="h-8 w-8 text-gray-600 dark:text-gray-300" />
+                            <UserIcon className="h-8 w-8 text-gray-600 dark:text-gray-300" />
                             {count > 0 && (
-                                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                                <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                                     {count}
                                 </span>
                             )}
@@ -69,7 +80,7 @@ const TicketManagementContent = () => {
                     </div>
 
                     <Card className="p-4">
-                        <TicketsList
+                        <ContactsList
                             refreshTrigger={refresh}
                             onRefresh={handleRefresh}
                         />
@@ -82,12 +93,12 @@ const TicketManagementContent = () => {
     );
 };
 
-const TicketManagement = () => {
+const ContactManagement = () => {
     return (
         <ErrorProvider>
-            <TicketManagementContent />
+            <ContactManagementContent />
         </ErrorProvider>
     );
 };
 
-export default TicketManagement;
+export default ContactManagement;

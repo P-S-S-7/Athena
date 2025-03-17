@@ -34,19 +34,17 @@ module Api
                 end
             end
 
-            begin
-                ticket_data = ticket_params.to_h
+            ticket_data = ticket_params.to_h
 
-                ticket_data[:status] = ticket_data[:status].to_i if ticket_data[:status].present?
-                ticket_data[:priority] = ticket_data[:priority].to_i if ticket_data[:priority].present?
-                ticket_data[:source] = ticket_data[:source].to_i if ticket_data[:source].present?
-                ticket_data[:group_id] = ticket_data[:group_id].to_i if ticket_data[:group_id].present?
-                ticket_data[:responder_id] = ticket_data[:responder_id].to_i if ticket_data[:responder_id].present?
-                ticket_data[:requester_id] = ticket_data[:requester_id].to_i if ticket_data[:requester_id].present?
+            ticket_data[:status] = ticket_data[:status].to_i if ticket_data[:status].present?
+            ticket_data[:priority] = ticket_data[:priority].to_i if ticket_data[:priority].present?
+            ticket_data[:source] = ticket_data[:source].to_i if ticket_data[:source].present?
+            ticket_data[:group_id] = ticket_data[:group_id].to_i if ticket_data[:group_id].present?
+            ticket_data[:responder_id] = ticket_data[:responder_id].to_i if ticket_data[:responder_id].present?
+            ticket_data[:requester_id] = ticket_data[:requester_id].to_i if ticket_data[:requester_id].present?
 
-                ticket = ticket_service.create_ticket(ticket_data, attachments)
-                render json: { ticket: ticket }, status: :created
-            end
+            ticket = ticket_service.create_ticket(ticket_data, attachments)
+            render json: { ticket: ticket }, status: :created
         end
 
         def update
@@ -89,13 +87,9 @@ module Api
                 end
             end
 
-            begin
-                reply_data = reply_params.to_h
-                response = ticket_service.add_reply(params[:id], reply_data, attachments)
-                render json: { success: true, reply: response }, status: :created
-            rescue => e
-                render json: { error: e.message }, status: :unprocessable_entity
-            end
+            reply_data = reply_params.to_h
+            response = ticket_service.add_reply(params[:id], reply_data, attachments)
+            render json: { success: true, reply: response }, status: :created
         end
 
         def note
@@ -108,44 +102,30 @@ module Api
                 end
             end
 
-            begin
-                note_data = note_params.to_h
-                note_data[:private] = ActiveModel::Type::Boolean.new.cast(note_data[:private]) if note_data[:private].present?
+            note_data = note_params.to_h
+            note_data[:private] = ActiveModel::Type::Boolean.new.cast(note_data[:private]) if note_data[:private].present?
 
-                response = ticket_service.add_note(params[:id], note_data, attachments)
-                render json: { success: true, note: response }, status: :created
-            rescue => e
-                render json: { error: e.message }, status: :unprocessable_entity
-            end
+            response = ticket_service.add_note(params[:id], note_data, attachments)
+            render json: { success: true, note: response }, status: :created
         end
-
 
         def forward
             ticket_service = Freshdesk::TicketService.new
 
-            begin
-                forward_data = forward_params.to_h
+            forward_data = forward_params.to_h
 
-                if forward_data.key?(:include_original_attachments)
-                    forward_data[:include_original_attachments] = ActiveModel::Type::Boolean.new.cast(forward_data[:include_original_attachments])
-                end
-
-                response = ticket_service.forward_ticket(params[:id], forward_data)
-                render json: { success: true, forward: response }, status: :created
-            rescue => e
-                render json: { error: e.message }, status: :unprocessable_entity
+            if forward_data.key?(:include_original_attachments)
+                forward_data[:include_original_attachments] = ActiveModel::Type::Boolean.new.cast(forward_data[:include_original_attachments])
             end
+
+            response = ticket_service.forward_ticket(params[:id], forward_data)
+            render json: { success: true, forward: response }, status: :created
         end
 
         def delete_conversation
             ticket_service = Freshdesk::TicketService.new
-
-            begin
-                ticket_service.delete_note(params[:id])
-                render json: { success: true }, status: :ok
-            rescue => e
-                render json: { error: e.message }, status: :unprocessable_entity
-            end
+            ticket_service.delete_conversation(params[:id])
+            render json: { success: true }, status: :ok
         end
 
         def update_conversation
@@ -158,13 +138,21 @@ module Api
                 end
             end
 
-            begin
-                conversation_data = { body: params[:body] }
+            conversation_data = { body: params[:body] }
 
-                response = ticket_service.update_note(params[:id], conversation_data, attachments)
-                render json: { success: true, conversation: response }, status: :ok
-            rescue => e
-                render json: { error: e.message }, status: :unprocessable_entity
+            response = ticket_service.update_conversation(params[:id], conversation_data, attachments)
+            render json: { success: true, conversation: response }, status: :ok
+        end
+
+        def merge
+            ticket_service = Freshdesk::TicketService.new
+
+             begin
+                primary_ticket_id = params[:id]
+                secondary_ticket_ids = params[:ticket_ids]
+
+                response = ticket_service.merge_tickets(primary_ticket_id, secondary_ticket_ids)
+                render json: { success: true, merged: response }, status: :ok
             end
         end
 

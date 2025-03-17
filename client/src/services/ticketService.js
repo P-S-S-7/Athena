@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { handleApiError } from '../utils/errorHandler';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -12,6 +13,7 @@ const ticketService = {
             return response.data;
         } catch (error) {
             console.error("Error fetching tickets:", error);
+            throw handleApiError(error);
         }
     },
 
@@ -21,7 +23,7 @@ const ticketService = {
             return response.data;
         } catch (error) {
             console.error("Error fetching ticket:", error);
-            throw error;
+            throw handleApiError(error);
         }
     },
 
@@ -33,142 +35,140 @@ const ticketService = {
             return response.data;
         } catch (error) {
             console.error("Error fetching conversations:", error);
-            throw error;
+            throw handleApiError(error);
         }
     },
 
     addReply: async (ticketId, replyData, attachments = []) => {
         try {
-          const formData = new FormData();
+            const formData = new FormData();
 
-          Object.entries(replyData).forEach(([key, value]) => {
-            if (value !== null && value !== undefined) {
-              formData.append(`reply[${key}]`, value);
-            }
-          });
-
-          if (attachments && attachments.length > 0) {
-            attachments.forEach((file, index) => {
-              formData.append(`attachments[${index}]`, file);
-            });
-          }
-
-          const response = await axios.post(
-            `${API_URL}/api/tickets/${ticketId}/reply`,
-            formData,
-            {
-              withCredentials: true,
-              headers: {
-                'Content-Type': 'multipart/form-data'
-              }
-            }
-          );
-          return response.data;
-        } catch (error) {
-          console.error("Error adding reply:", error);
-          throw error;
-        }
-      },
-
-      addNote: async (ticketId, noteData, attachments = []) => {
-        try {
-          const formData = new FormData();
-
-          Object.entries(noteData).forEach(([key, value]) => {
-            if (value !== null && value !== undefined) {
-                if (typeof value === 'boolean') {
-                    formData.append(`note[${key}]`, value ? 'true' : 'false');
-                  } else {
-                    formData.append(`note[${key}]`, value);
-                  }
-            }
-          });
-
-          if (attachments && attachments.length > 0) {
-            attachments.forEach((file, index) => {
-              formData.append(`attachments[${index}]`, file);
-            });
-          }
-
-
-
-          const response = await axios.post(
-            `${API_URL}/api/tickets/${ticketId}/note`,
-            formData,
-            {
-              withCredentials: true,
-              headers: {
-                'Content-Type': 'multipart/form-data'
-              }
-            }
-          );
-          return response.data;
-        } catch (error) {
-          console.error("Error adding note:", error);
-          throw error;
-        }
-    },
-
-    deleteConversation:async (conversationId) => {
-        try {
-          const response = await axios.delete(
-            `${API_URL}/api/conversations/${conversationId}`,
-            { withCredentials: true }
-          );
-          return response.data;
-        } catch (error) {
-          console.error("Error deleting conversation:", error);
-          throw error;
-        }
-      },
-
-      updateConversation:async (conversationId, formData) => {
-        try {
-            const response = await axios.put(
-              `${API_URL}/api/conversations/${conversationId}`,
-              formData,
-              {
-                withCredentials: true,
-                headers: {
-                  'Content-Type': 'multipart/form-data'
+            Object.entries(replyData).forEach(([key, value]) => {
+                if (value !== null && value !== undefined) {
+                    formData.append(`reply[${key}]`, value);
                 }
-              }
-            );
-            return response.data;
-          } catch (error) {
-            console.error("Error updating conversation:", error);
-            throw error;
-          }
-      },
+            });
 
-      forwardTicket: async (ticketId, forwardData) => {
-        try {
-            const payload = {
-              body: forwardData.body,
-              to_emails: forwardData.to_emails || [],
-              cc_emails: forwardData.cc_emails || [],
-              bcc_emails: forwardData.bcc_emails || []
-            };
-
-            if (forwardData.hasOwnProperty('include_original_attachments')) {
-              payload.include_original_attachments = forwardData.include_original_attachments;
+            if (attachments && attachments.length > 0) {
+                attachments.forEach((file, index) => {
+                    formData.append(`attachments[${index}]`, file);
+                });
             }
 
             const response = await axios.post(
-              `${API_URL}/api/tickets/${ticketId}/forward`,
-              payload,
-              {
-                withCredentials: true,
-                headers: {
-                  'Content-Type': 'application/json'
+                `${API_URL}/api/tickets/${ticketId}/reply`,
+                formData,
+                {
+                    withCredentials: true,
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
                 }
-              }
             );
             return response.data;
-          } catch (error) {
+        } catch (error) {
+            console.error("Error adding reply:", error);
+            throw handleApiError(error);
+        }
+    },
+
+    addNote: async (ticketId, noteData, attachments = []) => {
+        try {
+            const formData = new FormData();
+
+            Object.entries(noteData).forEach(([key, value]) => {
+                if (value !== null && value !== undefined) {
+                    if (typeof value === 'boolean') {
+                        formData.append(`note[${key}]`, value ? 'true' : 'false');
+                    } else {
+                        formData.append(`note[${key}]`, value);
+                    }
+                }
+            });
+
+            if (attachments && attachments.length > 0) {
+                attachments.forEach((file, index) => {
+                    formData.append(`attachments[${index}]`, file);
+                });
+            }
+
+            const response = await axios.post(
+                `${API_URL}/api/tickets/${ticketId}/note`,
+                formData,
+                {
+                    withCredentials: true,
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error adding note:", error);
+            throw handleApiError(error);
+        }
+    },
+
+    deleteConversation: async (conversationId) => {
+        try {
+            const response = await axios.delete(
+                `${API_URL}/api/conversations/${conversationId}`,
+                { withCredentials: true }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error deleting conversation:", error);
+            throw handleApiError(error);
+        }
+    },
+
+    updateConversation: async (conversationId, formData) => {
+        try {
+            const response = await axios.put(
+                `${API_URL}/api/conversations/${conversationId}`,
+                formData,
+                {
+                    withCredentials: true,
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error updating conversation:", error);
+            throw handleApiError(error);
+        }
+    },
+
+    forwardTicket: async (ticketId, forwardData) => {
+        try {
+            const payload = {
+                body: forwardData.body,
+                to_emails: forwardData.to_emails || [],
+                cc_emails: forwardData.cc_emails || [],
+                bcc_emails: forwardData.bcc_emails || []
+            };
+
+            if (forwardData.hasOwnProperty('include_original_attachments')) {
+                payload.include_original_attachments = forwardData.include_original_attachments;
+            }
+
+            const response = await axios.post(
+                `${API_URL}/api/tickets/${ticketId}/forward`,
+                payload,
+                {
+                    withCredentials: true,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            return response.data;
+        } catch (error) {
             console.error("Error forwarding ticket:", error);
-            throw error;
-          }
+            throw handleApiError(error);
+        }
     },
 
     createTicket: async (ticketData, attachments = []) => {
@@ -203,7 +203,7 @@ const ticketService = {
             return response.data;
         } catch (error) {
             console.error("Error in createTicket service:", error);
-            throw error;
+            throw handleApiError(error);
         }
     },
 
@@ -215,7 +215,7 @@ const ticketService = {
             return response.data;
         } catch (error) {
             console.error("Error updating ticket:", error);
-            throw error;
+            throw handleApiError(error);
         }
     },
 
@@ -225,7 +225,7 @@ const ticketService = {
             return { success: true };
         } catch (error) {
             console.error("Error deleting ticket:", error);
-            throw error;
+            throw handleApiError(error);
         }
     },
 
@@ -235,7 +235,7 @@ const ticketService = {
             return response.data.fields;
         } catch (error) {
             console.error("Error fetching ticket fields:", error);
-            return [];
+            throw handleApiError(error);
         }
     },
 
@@ -278,8 +278,6 @@ const ticketService = {
             }
 
             if (filterParams.source !== undefined) {
-                console.log(filterParams.source);
-                console.log(ticket.source);
                 if (Array.isArray(filterParams.source)) {
                     if (filterParams.source.length > 0 && !filterParams.source.includes(ticket.source)) {
                         return false;
@@ -345,6 +343,21 @@ const ticketService = {
             return response.data;
         } catch (error) {
             console.error("Error fetching ticket count:", error);
+            throw handleApiError(error);
+        }
+    },
+
+    mergeTickets: async (primaryTicketId, secondaryTicketIds) => {
+        try {
+            const response = await axios.post(
+            `${API_URL}/api/tickets/${primaryTicketId}/merge`,
+            { ticket_ids: secondaryTicketIds },
+            { withCredentials: true }
+            );
+            return response.data;
+        } catch (error) {
+            console.error("Error merging tickets:", error);
+            throw handleApiError(error);
         }
     }
 };

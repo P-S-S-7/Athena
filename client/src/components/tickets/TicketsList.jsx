@@ -6,10 +6,11 @@ import ticketService from "@/services/ticketService";
 import TicketFilters from "./TicketFilters";
 import TicketCard from "./layouts/TicketCard";
 import TicketTable from "./layouts/TicketTable";
-import { showErrorToast, showSuccessToast, ToastContainer } from "../../utils/toast";
+import { showSuccessToast, ToastContainer } from "../../utils/toast";
 import { statusMap, priorityMap, sourceMap, agentMap, groupMap } from "@/utils/freshdeskMappings";
+import { useError } from "@/contexts/ErrorContext";
 
-const TicketsList = ({ refreshTrigger, onRefreshNeeded }) => {
+const TicketsList = ({ refreshTrigger, onRefresh }) => {
     const [allTickets, setAllTickets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedTickets, setSelectedTickets] = useState([]);
@@ -24,14 +25,16 @@ const TicketsList = ({ refreshTrigger, onRefreshNeeded }) => {
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
     const [localRefreshKey, setLocalRefreshKey] = useState(0);
 
+    const { handleError } = useError();
+
     const combinedRefreshTrigger = useMemo(() => {
         return { external: refreshTrigger, local: localRefreshKey };
     }, [refreshTrigger, localRefreshKey]);
 
     const refreshData = () => {
         setLocalRefreshKey(prev => prev + 1);
-        if (onRefreshNeeded) {
-            onRefreshNeeded();
+        if (onRefresh) {
+            onRefresh();
         }
     };
 
@@ -50,15 +53,14 @@ const TicketsList = ({ refreshTrigger, onRefreshNeeded }) => {
                     setFilteredTickets(response.tickets);
                 }
             } catch (error) {
-                console.error("Error fetching data:", error);
-                showErrorToast("Failed to fetch data. Please try again.");
+                handleError(error);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchTicketsData();
-    }, [sortBy, sortOrder, combinedRefreshTrigger]);
+    }, [sortBy, sortOrder, combinedRefreshTrigger, handleError]);
 
     useEffect(() => {
         if (view === "table") {
@@ -105,7 +107,7 @@ const TicketsList = ({ refreshTrigger, onRefreshNeeded }) => {
 
     const handleBulkAction = async (action, value) => {
         if (selectedTickets.length === 0) {
-            showErrorToast("No tickets selected.");
+            handleError(new Error("No tickets selected."));
             return;
         }
 
@@ -144,8 +146,7 @@ const TicketsList = ({ refreshTrigger, onRefreshNeeded }) => {
                 }
             }
         } catch (error) {
-            console.error("Error performing bulk action:", error);
-            showErrorToast("An error occurred during the bulk operation");
+            handleError(error);
         } finally {
             setBulkActionLoading(false);
             setSelectedTickets([]);
@@ -185,8 +186,7 @@ const TicketsList = ({ refreshTrigger, onRefreshNeeded }) => {
 
             setPage(1);
         } catch (error) {
-            console.error("Error filtering tickets:", error);
-            showErrorToast("Failed to filter tickets. Please try again.");
+            handleError(error);
             setFilteredTickets(allTickets);
         } finally {
             setLoading(false);

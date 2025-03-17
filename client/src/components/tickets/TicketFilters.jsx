@@ -22,6 +22,7 @@ import ticketService from "@/services/ticketService";
 import { sourceMap, statusMap, priorityMap, agentMap, groupMap } from "@/utils/freshdeskMappings";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useError } from "@/contexts/ErrorContext";
 
 const TicketFilters = ({ onApply }) => {
     const [availableFilters, setAvailableFilters] = useState([]);
@@ -31,6 +32,7 @@ const TicketFilters = ({ onApply }) => {
         created_before: ""
     });
     const [multiSelectFilters, setMultiSelectFilters] = useState({});
+    const { handleError } = useError();
 
     useEffect(() => {
         const fetchTicketFields = async () => {
@@ -65,14 +67,14 @@ const TicketFilters = ({ onApply }) => {
                 setFilters(initialFilters);
                 setMultiSelectFilters(initialMultiSelectFilters);
             } catch (error) {
-                console.error("Error fetching ticket fields:", error);
+                handleError(error);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchTicketFields();
-    }, []);
+    }, [handleError]);
 
     const handleFilterChange = (field, value) => {
         const newValue = value === "_any_" ? "" : value;

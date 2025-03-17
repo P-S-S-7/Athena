@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Forward, User, Users, UserPlus, X, PaperclipIcon } from 'lucide-react';
+import { Loader2, Forward, User, Users, UserPlus, X, PaperclipIcon, FileText, Download } from 'lucide-react';
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import RichTextEditor from '@/utils/RichTextEditor';
-import { showErrorToast, showSuccessToast } from '@/utils/toast';
+import { showSuccessToast } from '@/utils/toast';
 import ticketService from '@/services/ticketService';
 import { agentMap, agentEmailMap, contactMap, contactEmailMap } from '@/utils/freshdeskMappings';
 import {
@@ -23,8 +23,10 @@ import {
     PopoverTrigger
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
+import { useError } from '@/contexts/ErrorContext';
 
 const ForwardTicket = ({ ticketId, ticket, onSuccess }) => {
+    const { handleError } = useError();
     const [content, setContent] = useState('');
     const [to, setTo] = useState([]);
     const [cc, setCc] = useState([]);
@@ -37,6 +39,7 @@ const ForwardTicket = ({ ticketId, ticket, onSuccess }) => {
     const [ccCommandOpen, setCcCommandOpen] = useState(false);
     const [bccCommandOpen, setBccCommandOpen] = useState(false);
     const [includeOriginalAttachments, setIncludeOriginalAttachments] = useState(false);
+    const [hasCannedResponse, setHasCannedResponse] = useState(false);
 
     const userEmailMap = { ...agentEmailMap, ...contactEmailMap };
     const userMap = { ...agentMap, ...contactMap };
@@ -48,6 +51,12 @@ const ForwardTicket = ({ ticketId, ticket, onSuccess }) => {
     })).filter(item => item.email);
 
     useEffect(() => {
+        if (content.trim() && hasCannedResponse === false) {
+            setHasCannedResponse(true);
+        }
+    }, [content, hasCannedResponse]);
+
+    useEffect(() => {
         if (ticket) {
             const contactName = contactMap[ticket.requester_id] || 'Contact';
             const contactEmail = contactEmailMap[ticket.requester_id] || '';
@@ -56,6 +65,14 @@ const ForwardTicket = ({ ticketId, ticket, onSuccess }) => {
             setContent(defaultContent);
         }
     }, [ticket]);
+
+    const handleContentChange = (newContent) => {
+        setContent(newContent);
+
+        if (newContent.trim() && !content.trim()) {
+            setHasCannedResponse(true);
+        }
+    };
 
     const addRecipient = (type, email) => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -130,37 +147,41 @@ const ForwardTicket = ({ ticketId, ticket, onSuccess }) => {
     };
 
     const handleSubmit = async () => {
-        if (!content.trim() || to.length === 0) {
-            showErrorToast('Content and at least one recipient are required');
+        if (to.length === 0) {
+            handleError(new Error('At least one recipient is required'));
+            return;
+        }
+
+        if (!content.trim()) {
+            handleError(new Error('Message content cannot be empty'));
             return;
         }
 
         try {
             setIsSubmitting(true);
 
-            await ticketService.forwardTicket(
-                ticketId,
-                {
-                    body: content,
-                    to_emails: to,
-                    cc_emails: cc,
-                    bcc_emails: bcc,
-                    include_original_attachments: includeOriginalAttachments
-                }
-            );
+            const forwardOptions = {
+                body: content,
+                to_emails: to,
+                cc_emails: cc,
+                bcc_emails: bcc,
+                include_original_attachments: includeOriginalAttachments
+            };
+
+            await ticketService.forwardTicket(ticketId, forwardOptions);
 
             showSuccessToast('Ticket forwarded successfully');
             setContent('');
             setTo([]);
             setCc([]);
             setBcc([]);
+            setHasCannedResponse(false);
 
             if (onSuccess) {
                 onSuccess();
             }
         } catch (error) {
-            console.error('Error forwarding ticket:', error);
-            showErrorToast('Failed to forward ticket: ' + (error.message || 'Unknown error'));
+            handleError(error);
         } finally {
             setIsSubmitting(false);
         }
@@ -170,7 +191,7 @@ const ForwardTicket = ({ ticketId, ticket, onSuccess }) => {
         const inputLower = input.toLowerCase();
         return emailOptions.filter(option =>
             (option.email.toLowerCase().includes(inputLower) ||
-             option.name.toLowerCase().includes(inputLower)) &&
+                option.name.toLowerCase().includes(inputLower)) &&
             !currentList.includes(option.email)
         );
     };
@@ -374,8 +395,9 @@ const ForwardTicket = ({ ticketId, ticket, onSuccess }) => {
                 <RichTextEditor
                     id="forwardBox"
                     value={content}
-                    onChange={setContent}
+                    onChange={handleContentChange}
                     className="min-h-[150px] mb-4"
+                    onCannedResponseInserted={setHasCannedResponse}
                 />
             </div>
 
@@ -414,7 +436,7 @@ const ForwardTicket = ({ ticketId, ticket, onSuccess }) => {
             <div className="flex justify-end">
                 <Button
                     onClick={handleSubmit}
-                    disabled={isSubmitting || !content.trim() || to.length === 0}
+                    disabled={isSubmitting || to.length === 0 || !content.trim()}
                     className="flex items-center gap-1"
                 >
                     {isSubmitting ? (

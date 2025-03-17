@@ -1,19 +1,31 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PaperclipIcon, Loader2, FileText } from 'lucide-react';
+import { PaperclipIcon, Loader2, FileText, Download } from 'lucide-react';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import RichTextEditor from '@/utils/RichTextEditor';
-import { showErrorToast, showSuccessToast } from '@/utils/toast';
+import { showSuccessToast } from '@/utils/toast';
 import ticketService from '@/services/ticketService';
+import { useError } from '@/contexts/ErrorContext';
 
-const AddNote = ({ ticketId, onSuccess }) => {
-    const [content, setContent] = useState('');
+const AddNote = ({ ticketId, user, onSuccess }) => {
+    const { handleError } = useError();
+    const [editableContent, setEditableContent] = useState('');
     const [attachments, setAttachments] = useState([]);
+    const [cannedResponseAttachments, setCannedResponseAttachments] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [noteType, setNoteType] = useState('private');
+    const [hasCannedResponse, setHasCannedResponse] = useState(false);
+
+    const headerText = `Created by ${user.email}`;
+
+    useEffect(() => {
+        if (editableContent.trim() && hasCannedResponse === false) {
+            setHasCannedResponse(true);
+        }
+    }, [editableContent, hasCannedResponse]);
 
     const handleFileChange = (e) => {
         const files = Array.from(e.target.files);
@@ -24,34 +36,66 @@ const AddNote = ({ ticketId, onSuccess }) => {
         setAttachments(attachments.filter((_, i) => i !== index));
     };
 
+    const removeCannedResponseAttachment = (index) => {
+        setCannedResponseAttachments(cannedResponseAttachments.filter((_, i) => i !== index));
+    };
+
+    const handleContentChange = (newContent) => {
+        setEditableContent(newContent);
+
+        if (newContent.trim() && !editableContent.trim()) {
+            setHasCannedResponse(true);
+        }
+    };
+
     const handleSubmit = async () => {
-        if (!content.trim()) {
-            showErrorToast('Note content cannot be empty');
+        if (!editableContent.trim()) {
+            handleError(new Error('Note content cannot be empty'));
             return;
         }
 
         try {
             setIsSubmitting(true);
 
+            const fullContent = `<div class="non-editable-header"><p>${headerText}</p><hr/><br/></div>${editableContent}`;
+
+            const downloadedAttachments = await Promise.all(
+                cannedResponseAttachments.map(async (attachment) => {
+                    try {
+                        const response = await fetch(attachment.attachment_url);
+                        const blob = await response.blob();
+                        return new File([blob], attachment.name, { type: attachment.content_type });
+                    } catch (error) {
+                        console.error(`Failed to download attachment ${attachment.name}:`, error);
+                        return null;
+                    }
+                })
+            );
+
+            const validDownloadedAttachments = downloadedAttachments.filter(file => file !== null);
+
+            const allAttachments = [...attachments, ...validDownloadedAttachments];
+
             await ticketService.addNote(
                 ticketId,
                 {
-                    body: content,
+                    body: fullContent,
                     private: noteType === 'private'
                 },
-                attachments
+                allAttachments
             );
 
             showSuccessToast('Note added successfully');
-            setContent('');
+            setEditableContent('');
             setAttachments([]);
+            setCannedResponseAttachments([]);
+            setHasCannedResponse(false);
 
             if (onSuccess) {
                 onSuccess();
             }
         } catch (error) {
-            console.error('Error adding note:', error);
-            showErrorToast('Failed to add note');
+            handleError(error);
         } finally {
             setIsSubmitting(false);
         }
@@ -78,11 +122,18 @@ const AddNote = ({ ticketId, onSuccess }) => {
                 </RadioGroup>
             </div>
 
+            <div className="mb-3 p-2 bg-gray-100 rounded-lg">
+                <p className="font-medium text-gray-700">{headerText}</p>
+                <div className="my-2 border-t border-gray-300"></div>
+            </div>
+
             <RichTextEditor
                 id="noteBox"
-                value={content}
-                onChange={setContent}
+                value={editableContent}
+                onChange={handleContentChange}
                 className="min-h-[150px] mb-4"
+                onCannedResponseAttachmentsChange={setCannedResponseAttachments}
+                onCannedResponseInserted={setHasCannedResponse}
             />
 
             <div className="mb-4">
@@ -100,10 +151,10 @@ const AddNote = ({ ticketId, onSuccess }) => {
 
                 {attachments.length > 0 && (
                     <div className="mt-2">
-                        <h4 className="text-sm font-medium">Attached Files:</h4>
+                        <h4 className="text-sm font-medium">Your Attachments:</h4>
                         <ul className="mt-1 space-y-1">
                             {attachments.map((file, index) => (
-                                <li key={index} className="flex items-center justify-between text-sm">
+                                <li key={`manual-${index}`} className="flex items-center justify-between text-sm">
                                     <div className="flex items-center">
                                         <PaperclipIcon className="h-4 w-4 mr-2 text-gray-400" />
                                         <span>{file.name} ({(file.size / 1024).toFixed(2)} KB)</span>
@@ -122,12 +173,55 @@ const AddNote = ({ ticketId, onSuccess }) => {
                         </ul>
                     </div>
                 )}
+
+                {cannedResponseAttachments.length > 0 && (
+                    <div className="mt-4">
+                        <h4 className="text-sm font-medium">Canned Response Attachments:</h4>
+                        <ul className="mt-1 space-y-1">
+                            {cannedResponseAttachments.map((attachment, index) => (
+                                <li
+                                    key={`canned-${index}`}
+                                    className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-gray-50"
+                                >
+                                    <div className="flex items-center overflow-hidden">
+                                        <FileText className="h-4 w-4 mr-2 text-blue-500 flex-shrink-0" />
+                                        <span className="truncate">{attachment.name}</span>
+                                        <span className="ml-1 text-gray-500">
+                                            ({(attachment.size / 1024).toFixed(2)} KB)
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Button
+                                            as="a"
+                                            href={attachment.attachment_url}
+                                            target="_blank"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-blue-500"
+                                        >
+                                            <Download className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => removeCannedResponseAttachment(index)}
+                                            className="text-red-500"
+                                        >
+                                            Remove
+                                        </Button>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
             </div>
 
             <div className="flex justify-end">
                 <Button
                     onClick={handleSubmit}
-                    disabled={isSubmitting || !content.trim()}
+                    disabled={isSubmitting || !editableContent.trim()}
                     className="flex items-center gap-1"
                 >
                     {isSubmitting ? (
