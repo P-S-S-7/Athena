@@ -36,8 +36,6 @@ module Freshdesk
                 body = body.to_unsafe_h
             end
 
-            body = deep_transform_boolean_strings(body)
-
             body_with_attachments = {
                 basic_auth: @auth,
                 multipart: true,
@@ -130,26 +128,6 @@ module Freshdesk
 
         private
 
-        def deep_transform_boolean_strings(hash)
-            return hash unless hash.is_a?(Hash)
-
-            hash = hash.to_h if hash.is_a?(ActionController::Parameters)
-
-            hash.transform_values do |value|
-                if value == 'true'
-                    true
-                elsif value == 'false'
-                    false
-                elsif value.is_a?(Hash) || value.is_a?(ActionController::Parameters)
-                    deep_transform_boolean_strings(value)
-                elsif value.is_a?(Array)
-                    value.map { |item| item.is_a?(Hash) || item.is_a?(ActionController::Parameters) ? deep_transform_boolean_strings(item) : item }
-                else
-                    value
-                end
-            end
-        end
-
         def handle_response
             response = yield
 
@@ -187,7 +165,6 @@ module Freshdesk
                 rescue
                     "API request failed with status code #{response.code}: #{response.message}"
                 end
-                Rails.logger.error("Freshdesk API response: #{response.body}")
                 raise Freshdesk::RequestError.new(error_message)
             end
         end

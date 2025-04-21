@@ -17,12 +17,16 @@ import {
     PopoverTrigger
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { X, Check } from "lucide-react";
+import {
+    X, Check, Calendar, FilterX, Filter, ChevronRight,
+    Search, ArrowRight, Calendar as CalendarIcon, Loader2
+} from "lucide-react";
 import ticketService from "@/services/ticketService";
-import { sourceMap, statusMap, priorityMap, agentMap, groupMap } from "@/utils/freshdeskMappings";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useError } from "@/contexts/ErrorContext";
+import { useData } from "@/contexts/DataContext";
+import { Separator } from "@/components/ui/separator";
 
 const TicketFilters = ({ onApply }) => {
     const [availableFilters, setAvailableFilters] = useState([]);
@@ -33,6 +37,7 @@ const TicketFilters = ({ onApply }) => {
     });
     const [multiSelectFilters, setMultiSelectFilters] = useState({});
     const { handleError } = useError();
+    const { statusMap, priorityMap, sourceMap, agentMap, groupMap } = useData();
 
     useEffect(() => {
         const fetchTicketFields = async () => {
@@ -232,6 +237,20 @@ const TicketFilters = ({ onApply }) => {
         return [];
     };
 
+    const anyFilterActive = () => {
+        const hasDateFilter = filters.created_after || filters.created_before;
+
+        const hasNestedFilter = Object.keys(filters).some(key =>
+            key.startsWith('cf_') && filters[key]
+        );
+
+        const hasMultiSelect = Object.values(multiSelectFilters).some(
+            values => values && values.length > 0
+        );
+
+        return hasDateFilter || hasNestedFilter || hasMultiSelect;
+    };
+
     const NestedDropdowns = ({ field, value, onChange }) => {
         const [level1, setLevel1] = useState("");
         const [level2, setLevel2] = useState("");
@@ -300,15 +319,20 @@ const TicketFilters = ({ onApply }) => {
 
         return (
             <div className="space-y-3">
-                <div>
-                    <Label htmlFor={`${field.name}-level1`} className="mb-2 block">
-                        {field.label}
-                    </Label>
+                <div className="mb-1">
+                    <div className="flex items-center">
+                        <span className="bg-blue-100 p-1 rounded-md mr-2">
+                            <ChevronRight className="h-3.5 w-3.5 text-blue-700" />
+                        </span>
+                        <Label htmlFor={`${field.name}-level1`} className="text-sm font-medium text-gray-700">
+                            {field.label}
+                        </Label>
+                    </div>
                     <Select
                         value={level1 || "_any_"}
                         onValueChange={(value) => handleLevelChange(1, value)}
                     >
-                        <SelectTrigger id={`${field.name}-level1`}>
+                        <SelectTrigger id={`${field.name}-level1`} className="w-full mt-1 h-8 text-sm">
                             <SelectValue placeholder={`Any ${field.label.toLowerCase()}`} />
                         </SelectTrigger>
                         <SelectContent>
@@ -323,15 +347,18 @@ const TicketFilters = ({ onApply }) => {
                 </div>
 
                 {level1 && level1 !== "_any_" && (
-                    <div className="ml-4 pl-2 border-l-2 border-gray-200">
-                        <Label htmlFor={`${field.name}-level2`} className="mb-2 block">
-                            {field.nested_ticket_fields?.[0]?.label || 'Subcategory'}
-                        </Label>
+                    <div className="ml-4 pl-3 border-l border-blue-200">
+                        <div className="flex items-center mb-1">
+                            <ArrowRight className="h-3 w-3 text-blue-500 mr-2" />
+                            <Label htmlFor={`${field.name}-level2`} className="text-xs font-medium text-gray-600">
+                                {field.nested_ticket_fields?.[0]?.label || 'Subcategory'}
+                            </Label>
+                        </div>
                         <Select
                             value={level2 || "_any_"}
                             onValueChange={(value) => handleLevelChange(2, value)}
                         >
-                            <SelectTrigger id={`${field.name}-level2`}>
+                            <SelectTrigger id={`${field.name}-level2`} className="w-full h-8 text-sm">
                                 <SelectValue placeholder={`Any subcategory`} />
                             </SelectTrigger>
                             <SelectContent>
@@ -347,15 +374,18 @@ const TicketFilters = ({ onApply }) => {
                 )}
 
                 {level1 && level1 !== "_any_" && level2 && level2 !== "_any_" && getLevel3Options().length > 0 && (
-                    <div className="ml-8 pl-2 border-l-2 border-gray-200">
-                        <Label htmlFor={`${field.name}-level3`} className="mb-2 block">
-                            {field.nested_ticket_fields?.[1]?.label || 'Item'}
-                        </Label>
+                    <div className="ml-8 pl-3 border-l border-blue-200">
+                        <div className="flex items-center mb-1">
+                            <ArrowRight className="h-3 w-3 text-blue-500 mr-2" />
+                            <Label htmlFor={`${field.name}-level3`} className="text-xs font-medium text-gray-600">
+                                {field.nested_ticket_fields?.[1]?.label || 'Item'}
+                            </Label>
+                        </div>
                         <Select
                             value={level3 || "_any_"}
                             onValueChange={(value) => handleLevelChange(3, value)}
                         >
-                            <SelectTrigger id={`${field.name}-level3`}>
+                            <SelectTrigger id={`${field.name}-level3`} className="w-full h-8 text-sm">
                                 <SelectValue placeholder={`Any item`} />
                             </SelectTrigger>
                             <SelectContent>
@@ -383,36 +413,67 @@ const TicketFilters = ({ onApply }) => {
             return found ? found.name : id;
         };
 
+        const getColorForValue = (fieldName, value) => {
+            if (fieldName === 'status') {
+                const statusColors = {
+                    '2': 'bg-amber-100 text-amber-800 border-amber-200',
+                    '3': 'bg-purple-100 text-purple-800 border-purple-200',
+                    '4': 'bg-green-100 text-green-800 border-green-200',
+                    '5': 'bg-gray-100 text-gray-800 border-gray-200'
+                };
+                return statusColors[value] || 'bg-blue-100 text-blue-800 border-blue-200';
+            }
+
+            if (fieldName === 'priority') {
+                const priorityColors = {
+                    '1': 'bg-green-100 text-green-800 border-green-200',
+                    '2': 'bg-blue-100 text-blue-800 border-blue-200',
+                    '3': 'bg-amber-100 text-amber-800 border-amber-200',
+                    '4': 'bg-red-100 text-red-800 border-red-200'
+                };
+                return priorityColors[value] || 'bg-blue-100 text-blue-800 border-blue-200';
+            }
+
+            return 'bg-blue-100 text-blue-800 border-blue-200';
+        };
+
         return (
-            <div className="space-y-2">
-                <Label htmlFor={field.name} className="mb-2 block">{field.label}</Label>
+            <div className="space-y-2 mb-3">
+                <div className="flex items-center mb-1">
+                    <Label htmlFor={field.name} className="text-sm font-medium text-gray-700">
+                        {field.label}
+                    </Label>
+                </div>
                 <Popover open={open} onOpenChange={setOpen}>
                     <PopoverTrigger asChild>
                         <Button
                             variant="outline"
                             role="combobox"
                             aria-expanded={open}
-                            className="w-full justify-between text-left"
+                            className="w-full justify-between text-left h-8 text-sm"
                         >
-                            {getSelectedOptionsLabel(field.name)}
-                            <X
-                                className={cn(
-                                    "ml-2 h-4 w-4 shrink-0 opacity-50",
-                                    fieldValues.length > 0 ? "opacity-100" : "hidden"
-                                )}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setMultiSelectFilters({
-                                        ...multiSelectFilters,
-                                        [field.name]: []
-                                    });
-                                }}
-                            />
+                            <span className="truncate">
+                                {getSelectedOptionsLabel(field.name)}
+                            </span>
+                            {fieldValues.length > 0 ? (
+                                <X
+                                    className="ml-2 h-3.5 w-3.5 shrink-0 text-gray-500 hover:text-gray-700"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMultiSelectFilters({
+                                            ...multiSelectFilters,
+                                            [field.name]: []
+                                        });
+                                    }}
+                                />
+                            ) : (
+                                <Search className="ml-2 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                            )}
                         </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="p-0" align="start" side="bottom">
+                    <PopoverContent className="p-0 w-[240px]" align="start" side="right">
                         <Command>
-                            <CommandInput placeholder={`Search ${field.label.toLowerCase()}...`} />
+                            <CommandInput placeholder={`Search ${field.label.toLowerCase()}...`} className="h-9" />
                             <CommandList>
                                 <CommandEmpty>No {field.label.toLowerCase()} found.</CommandEmpty>
                                 <CommandGroup>
@@ -421,15 +482,18 @@ const TicketFilters = ({ onApply }) => {
                                             key={option.id}
                                             value={option.name}
                                             onSelect={() => toggleMultiSelectOption(field.name, option.id)}
+                                            className="cursor-pointer"
                                         >
-                                            <div className="flex items-center">
+                                            <div className="flex items-center w-full">
                                                 <div className={cn(
-                                                    "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                                                    fieldValues.includes(option.id) ? "bg-primary text-primary-foreground" : "opacity-50"
+                                                    "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border",
+                                                    fieldValues.includes(option.id)
+                                                        ? "bg-blue-600 border-blue-600 text-white"
+                                                        : "border-gray-300 opacity-70"
                                                 )}>
                                                     {fieldValues.includes(option.id) && <Check className="h-3 w-3" />}
                                                 </div>
-                                                {option.name}
+                                                <span className="flex-grow truncate">{option.name}</span>
                                             </div>
                                         </CommandItem>
                                     ))}
@@ -444,13 +508,15 @@ const TicketFilters = ({ onApply }) => {
                         {fieldValues.map(value => (
                             <Badge
                                 key={value}
-                                variant="secondary"
-                                className="flex items-center gap-1"
+                                variant="outline"
+                                className={cn("flex items-center gap-1 text-xs py-0.5",
+                                    getColorForValue(field.name, value)
+                                )}
                             >
                                 {getDisplayValue(value)}
                                 <button
                                     onClick={() => removeMultiSelectOption(field.name, value)}
-                                    className="ml-1 text-gray-500 hover:text-gray-700"
+                                    className="ml-1 text-current opacity-70 hover:opacity-100"
                                 >
                                     <X className="h-3 w-3" />
                                 </button>
@@ -463,62 +529,107 @@ const TicketFilters = ({ onApply }) => {
     };
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Filters</CardTitle>
+        <Card className="shadow-sm border-gray-200 rounded-none">
+            <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 pb-3 pt-3 rounded-none">
+                <CardTitle className="flex items-center text-base">
+                    <Filter className="mr-2 h-4 w-4 text-gray-500" />
+                    Filter Tickets
+                </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="p-3">
                 {loading ? (
-                    <div className="text-center py-4">Loading filters...</div>
+                    <div className="flex items-center justify-center py-8 text-gray-500">
+                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                        <span>Loading filters...</span>
+                    </div>
                 ) : (
-                    <>
-                        {availableFilters.map(field => (
-                            <div key={field.id} className="mb-4">
-                                {isNestedField(field) ? (
+                    <div className="space-y-1">
+                        <div className="space-y-3">
+                            {availableFilters.filter(field => !isNestedField(field)).map(field => (
+                                <MultiSelectFilter key={field.id} field={field} />
+                            ))}
+
+                            {availableFilters.filter(isNestedField).length > 0 && (
+                                <Separator className="my-4" />
+                            )}
+
+                            {availableFilters.filter(isNestedField).map(field => (
+                                <div key={field.id} className="mb-4">
                                     <NestedDropdowns
                                         field={field}
                                         value={filters[field.name] || ""}
                                         onChange={(value) => handleFilterChange(field.name, value)}
                                     />
-                                ) : (
-                                    <MultiSelectFilter field={field} />
-                                )}
+                                </div>
+                            ))}
+
+                            <Separator className="my-4" />
+
+                            <div className="space-y-3">
+                                <div className="flex items-center mb-1">
+                                    <CalendarIcon className="h-4 w-4 mr-2 text-gray-500" />
+                                    <Label htmlFor="date-filters" className="text-sm font-medium text-gray-700">
+                                        Date Range
+                                    </Label>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div>
+                                        <Label htmlFor="created-after" className="text-xs text-gray-600 ml-1">
+                                            From
+                                        </Label>
+                                        <Input
+                                            id="created-after"
+                                            type="date"
+                                            value={filters.created_after}
+                                            onChange={(e) => handleFilterChange("created_after", e.target.value)}
+                                            className="h-8 text-sm mt-1"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="created-before" className="text-xs text-gray-600 ml-1">
+                                            To
+                                        </Label>
+                                        <Input
+                                            id="created-before"
+                                            type="date"
+                                            value={filters.created_before}
+                                            onChange={(e) => handleFilterChange("created_before", e.target.value)}
+                                            className="h-8 text-sm mt-1"
+                                        />
+                                    </div>
+                                </div>
                             </div>
-                        ))}
 
-                        <div className="space-y-2">
-                            <Label htmlFor="created-after" className="mb-2 block">Created After</Label>
-                            <Input
-                                id="created-after"
-                                type="date"
-                                value={filters.created_after}
-                                onChange={(e) => handleFilterChange("created_after", e.target.value)}
-                            />
-                        </div>
+                            <div className="space-y-2 pt-4">
+                                <Button
+                                    size="sm"
+                                    className="w-full gap-1.5 flex items-center bg-slate-800 hover:bg-slate-900"
+                                    onClick={handleApplyFilters}
+                                >
+                                    <Filter className="h-3.5 w-3.5" />
+                                    Apply Filters
+                                </Button>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="created-before" className="mb-2 block">Created Before</Label>
-                            <Input
-                                id="created-before"
-                                type="date"
-                                value={filters.created_before}
-                                onChange={(e) => handleFilterChange("created_before", e.target.value)}
-                            />
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className={cn(
+                                        "w-full gap-1.5 flex items-center",
+                                        anyFilterActive()
+                                            ? "text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
+                                            : "text-gray-500"
+                                    )}
+                                    onClick={handleResetFilters}
+                                    disabled={!anyFilterActive()}
+                                >
+                                    <FilterX className="h-3.5 w-3.5" />
+                                    Reset Filters
+                                </Button>
+                            </div>
                         </div>
-
-                        <div className="space-y-4 pt-4">
-                            <Button className="w-full" onClick={handleApplyFilters}>
-                                Apply Filters
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="w-full"
-                                onClick={handleResetFilters}
-                            >
-                                Reset Filters
-                            </Button>
-                        </div>
-                    </>
+                    </div>
                 )}
             </CardContent>
         </Card>

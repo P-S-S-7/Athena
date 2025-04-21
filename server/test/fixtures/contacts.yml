@@ -1,0 +1,57 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  gid: MyString
+  freshdesk_id: 
+  active: false
+  address: MyText
+  description: MyText
+  job_title: MyString
+  language: MyString
+  name: MyString
+  email: MyString
+  mobile: 
+  phone: 
+  twitter_id: MyString
+  unique_external_id: MyString
+  preferred_source: MyString
+  time_zone: MyString
+  visitor_id: MyString
+  org_contact_id: MyString
+  is_deleted: false
+  other_emails: 
+  other_companies: 
+  other_phone_numbers: 
+  tags: 
+  company: one
+  avatar: one
+  created_at: 2025-03-28 14:52:53
+  updated_at: 2025-03-28 14:52:53
+
+two:
+  gid: MyString
+  freshdesk_id: 
+  active: false
+  address: MyText
+  description: MyText
+  job_title: MyString
+  language: MyString
+  name: MyString
+  email: MyString
+  mobile: 
+  phone: 
+  twitter_id: MyString
+  unique_external_id: MyString
+  preferred_source: MyString
+  time_zone: MyString
+  visitor_id: MyString
+  org_contact_id: MyString
+  is_deleted: false
+  other_emails: 
+  other_companies: 
+  other_phone_numbers: 
+  tags: 
+  company: two
+  avatar: two
+  created_at: 2025-03-28 14:52:53
+  updated_at: 2025-03-28 14:52:53

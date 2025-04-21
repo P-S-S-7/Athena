@@ -1,0 +1,61 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  gid: MyString
+  freshdesk_id: 
+  org_agent_id: MyString
+  available: false
+  occasional: false
+  ticket_scope: 1
+  last_active_at: 2025-03-28 14:48:28
+  available_since: 2025-03-28 14:48:28
+  agent_type: MyString
+  deactivated: false
+  signature: MyText
+  focus_mode: false
+  active: false
+  email: MyString
+  job_title: MyString
+  language: MyString
+  last_login_at: 2025-03-28 14:48:28
+  mobile: MyString
+  name: MyString
+  phone: MyString
+  time_zone: MyString
+  scope: 1
+  roles: 
+  skills: 
+  contribution_groups: 
+  org_contribution_groups: 
+  created_at: 2025-03-28 14:48:28
+  updated_at: 2025-03-28 14:48:28
+
+two:
+  gid: MyString
+  freshdesk_id: 
+  org_agent_id: MyString
+  available: false
+  occasional: false
+  ticket_scope: 1
+  last_active_at: 2025-03-28 14:48:28
+  available_since: 2025-03-28 14:48:28
+  agent_type: MyString
+  deactivated: false
+  signature: MyText
+  focus_mode: false
+  active: false
+  email: MyString
+  job_title: MyString
+  language: MyString
+  last_login_at: 2025-03-28 14:48:28
+  mobile: MyString
+  name: MyString
+  phone: MyString
+  time_zone: MyString
+  scope: 1
+  roles: 
+  skills: 
+  contribution_groups: 
+  org_contribution_groups: 
+  created_at: 2025-03-28 14:48:28
+  updated_at: 2025-03-28 14:48:28

@@ -8,7 +8,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import RichTextEditor from '@/utils/RichTextEditor';
 import { showSuccessToast } from '@/utils/toast';
 import ticketService from '@/services/ticketService';
-import { agentMap, agentEmailMap, contactMap, contactEmailMap } from '@/utils/freshdeskMappings';
 import {
     Command,
     CommandEmpty,
@@ -24,6 +23,7 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { useError } from '@/contexts/ErrorContext';
+import { useData } from '@/contexts/DataContext';
 
 const ForwardTicket = ({ ticketId, ticket, onSuccess }) => {
     const { handleError } = useError();
@@ -40,6 +40,7 @@ const ForwardTicket = ({ ticketId, ticket, onSuccess }) => {
     const [bccCommandOpen, setBccCommandOpen] = useState(false);
     const [includeOriginalAttachments, setIncludeOriginalAttachments] = useState(false);
     const [hasCannedResponse, setHasCannedResponse] = useState(false);
+    const { agentMap, contactMap, agentEmailMap, contactEmailMap } = useData();
 
     const userEmailMap = { ...agentEmailMap, ...contactEmailMap };
     const userMap = { ...agentMap, ...contactMap };

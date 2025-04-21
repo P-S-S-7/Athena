@@ -4,22 +4,6 @@ module Freshdesk
             @client = ApiClient.new
         end
 
-        def list_contacts(params = {})
-            begin
-                default_params = {
-                    order_by: 'created_at',
-                    order_type: 'desc'
-                }
-
-                query = default_params.merge(params)
-                @client.request(:get, '/contacts', {}, query)
-            rescue Freshdesk::Error => e
-                raise e
-            rescue => e
-                raise Freshdesk::RequestError.new("Failed to list contacts: #{e.message}")
-            end
-        end
-
         def get_contact(id)
             begin
                 @client.request(:get, "/contacts/#{id}")
@@ -93,7 +77,7 @@ module Freshdesk
 
         def delete_contact(id)
             begin
-                @client.request(:delete, "/contacts/#{id}")
+                @client.request(:delete, "/contacts/#{id}/hard_delete?force=true")
             rescue Freshdesk::ResourceNotFoundError
                 raise Freshdesk::ResourceNotFoundError.new("Contact ##{id} not found")
             rescue Freshdesk::Error => e
@@ -145,16 +129,6 @@ module Freshdesk
                 raise e
             rescue => e
                 raise Freshdesk::RequestError.new("Failed to get contact fields: #{e.message}")
-            end
-        end
-
-        def get_companies
-            begin
-                @client.request(:get, '/companies')
-            rescue Freshdesk::Error => e
-                raise e
-            rescue => e
-                raise Freshdesk::RequestError.new("Failed to get companies: #{e.message}")
             end
         end
     end

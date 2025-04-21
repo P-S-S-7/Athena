@@ -22,7 +22,6 @@ module Server
 
         config.generators do |g|
             g.orm :active_record, primary: true
-            g.orm :mongoid
         end
     end
 end

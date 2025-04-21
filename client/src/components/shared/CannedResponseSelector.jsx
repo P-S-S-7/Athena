@@ -1,6 +1,6 @@
-import { useState, useEffect, forwardRef } from 'react';
+import { useState, useEffect, forwardRef, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,23 +16,49 @@ const CannedResponseSelector = forwardRef(({ onSelectResponse }, ref) => {
     const [folders, setFolders] = useState([]);
     const [expandedFolders, setExpandedFolders] = useState({});
     const [folderResponses, setFolderResponses] = useState({});
+    const [allResponses, setAllResponses] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [recentlyUsed, setRecentlyUsed] = useState([]);
     const [activeTab, setActiveTab] = useState('all');
 
     useEffect(() => {
-        const fetchFolders = async () => {
+        const fetchFoldersAndAllResponses = async () => {
             try {
                 setLoading(true);
-                const data = await cannedResponseService.getFolders();
-                setFolders(data || []);
+                const folderData = await cannedResponseService.getFolders();
+                setFolders(folderData || []);
 
                 const expandedState = {};
-                data.forEach(folder => {
-                    expandedState[folder.id] = false;
+                folderData.forEach(folder => {
+                    expandedState[folder._id] = false;
                 });
                 setExpandedFolders(expandedState);
+
+                const responsesArray = await Promise.all(
+                    folderData.map(async (folder) => {
+                        const res = await cannedResponseService.getFolderResponses(folder._id);
+                        return { folderId: folder._id, responses: res.canned_responses || [] };
+                    })
+                );
+
+                const folderResponsesMap = {};
+                responsesArray.forEach(({ folderId, responses }) => {
+                    folderResponsesMap[folderId] = responses;
+                });
+                setFolderResponses(folderResponsesMap);
+
+                const flatResponses = [];
+                responsesArray.forEach(({ folderId, responses }) => {
+                    const folder = folderData.find(f => f._id === folderId);
+                    responses.forEach(response => {
+                        flatResponses.push({
+                            ...response,
+                            folderName: folder ? folder.name : 'Unknown Folder'
+                        });
+                    });
+                });
+                setAllResponses(flatResponses);
 
                 const storedRecent = localStorage.getItem('recentCannedResponses');
                 if (storedRecent) {
@@ -43,6 +69,7 @@ const CannedResponseSelector = forwardRef(({ onSelectResponse }, ref) => {
                         localStorage.removeItem('recentCannedResponses');
                     }
                 }
+
             } catch (error) {
                 handleError(error);
             } finally {
@@ -51,31 +78,17 @@ const CannedResponseSelector = forwardRef(({ onSelectResponse }, ref) => {
         };
 
         if (open) {
-            fetchFolders();
+            fetchFoldersAndAllResponses();
+        } else {
+            setSearchQuery('');
         }
     }, [open, handleError]);
 
-    const toggleFolder = async (folderId) => {
-        const newExpandedState = {
-            ...expandedFolders,
-            [folderId]: !expandedFolders[folderId]
-        };
-        setExpandedFolders(newExpandedState);
-
-        if (newExpandedState[folderId] && !folderResponses[folderId]) {
-            try {
-                setLoading(true);
-                const data = await cannedResponseService.getFolderResponses(folderId);
-                setFolderResponses(prev => ({
-                    ...prev,
-                    [folderId]: data.canned_responses || []
-                }));
-            } catch (error) {
-                handleError(error);
-            } finally {
-                setLoading(false);
-            }
-        }
+    const toggleFolder = (folderId) => {
+        setExpandedFolders(prev => ({
+            ...prev,
+            [folderId]: !prev[folderId]
+        }));
     };
 
     const handleSelectResponse = async (responseId) => {
@@ -88,7 +101,8 @@ const CannedResponseSelector = forwardRef(({ onSelectResponse }, ref) => {
                     id: response.id,
                     title: response.title,
                     folder_id: response.folder_id,
-                    has_attachments: response.attachments && response.attachments.length > 0
+                    has_attachments: response.attachments && response.attachments.length > 0,
+                    _uniqueId: Date.now().toString()
                 },
                 ...recentlyUsed.filter(item => item.id !== response.id).slice(0, 4)
             ];
@@ -104,52 +118,59 @@ const CannedResponseSelector = forwardRef(({ onSelectResponse }, ref) => {
         }
     };
 
-    const getFilteredResponses = () => {
+    const filteredResponses = useMemo(() => {
         if (!searchQuery.trim()) return [];
 
-        const results = [];
-
-        Object.entries(folderResponses).forEach(([folderId, responses]) => {
-            const matchingResponses = responses.filter(response =>
-                response.title.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-
-            if (matchingResponses.length > 0) {
-                const folder = folders.find(f => f.id.toString() === folderId);
-                matchingResponses.forEach(response => {
-                    results.push({
-                        ...response,
-                        folderName: folder ? folder.name : 'Unknown Folder'
-                    });
-                });
-            }
-        });
-
-        return results;
-    };
+        return allResponses.filter(response =>
+            response.title.toLowerCase().includes(searchQuery.toLowerCase())
+        ).map((response, index) => ({
+            ...response,
+            _searchResultId: `search-${response.id || response._id}-${index}`
+        }));
+    }, [searchQuery, allResponses]);
 
     const renderResponseItem = (response, onClick) => {
         const hasAttachments = response.has_attachments;
 
         return (
             <div
-                className="py-2 px-3 hover:bg-gray-100 rounded-md cursor-pointer text-sm transition-colors"
-                onClick={onClick}
+            className="py-2 px-3 hover:bg-gray-100 rounded-md cursor-pointer text-sm transition-colors"
+            onClick={onClick}
             >
-                <div className="flex items-center justify-between">
-                    <span>{response.title}</span>
-                    {hasAttachments && (
-                        <Badge variant="outline" className="ml-2 px-1.5 py-0.5">
-                            <PaperclipIcon className="h-3 w-3 mr-1" />
-                            <span className="text-xs">Attachment</span>
-                        </Badge>
-                    )}
-                </div>
-                {response.folderName && (
-                    <div className="text-xs text-gray-500">{response.folderName}</div>
-                )}
+            <div className="flex items-center justify-between">
+            <span>
+                {response.title.length > 50
+                ? response.title.substring(0, 50).split(' ').slice(0, -1).join(' ') + '...'
+                : response.title}
+            </span>
+            {hasAttachments && (
+            <Badge variant="outline" className="ml-2 px-1.5 py-0.5">
+                <PaperclipIcon className="h-3 w-3 mr-1" />
+                <span className="text-xs">Attachment</span>
+            </Badge>
+            )}
+            </div>
+            {response.folderName && (
+            <div className="text-xs text-gray-500">{response.folderName}</div>
+            )}
             </div>
         );
+    };
+
+    const getUniqueKey = (response) => {
+        if (response._searchResultId) return response._searchResultId;
+        if (response._uniqueId) return response._uniqueId;
+
+        if (response._id) {
+            return `resp-${response._id.toString()}`;
+        }
+
+        if (response.id) {
+            const folderId = response.folder_id ? `-${response.folder_id}` : '';
+            return `id-${response.id}${folderId}`;
+        }
+
+        return `key-${Math.random().toString(36).substring(2, 11)}`;
     };
 
     return (
@@ -169,6 +190,9 @@ const CannedResponseSelector = forwardRef(({ onSelectResponse }, ref) => {
             <DialogContent className="max-w-md max-h-[90vh] overflow-hidden">
                 <DialogHeader>
                     <DialogTitle className="text-lg font-semibold">Canned Responses</DialogTitle>
+                    <DialogDescription>
+                        Select a pre-written response to insert into your message.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="mb-4">
@@ -199,68 +223,63 @@ const CannedResponseSelector = forwardRef(({ onSelectResponse }, ref) => {
 
                     <TabsContent value="all" className="max-h-[60vh]">
                         <ScrollArea className="h-[50vh]">
-                            {searchQuery ? (
+                            {loading && folders.length === 0 ? (
+                                <div className="flex justify-center items-center h-40">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                </div>
+                            ) : searchQuery ? (
                                 <>
                                     <h3 className="font-medium text-sm mb-2 text-gray-500">Search Results</h3>
-                                    {getFilteredResponses().map((response) => (
-                                        <div key={response.id}>
-                                            {renderResponseItem(
-                                                response,
-                                                () => handleSelectResponse(response.id)
-                                            )}
-                                        </div>
-                                    ))}
-                                    {getFilteredResponses().length === 0 && (
+                                    {filteredResponses.length > 0 ? (
+                                        filteredResponses.map((response) => (
+                                            <div key={getUniqueKey(response)}>
+                                                {renderResponseItem(
+                                                    response,
+                                                    () => handleSelectResponse(response.id || response._id)
+                                                )}
+                                            </div>
+                                        ))
+                                    ) : (
                                         <div className="text-center py-4 text-gray-500">No responses match your search</div>
                                     )}
                                 </>
                             ) : (
-                                <>
-                                    {loading && folders.length === 0 ? (
-                                        <div className="flex justify-center items-center h-40">
-                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                                        </div>
-                                    ) : (
-                                        folders.map((folder) => (
-                                            <Collapsible
-                                                key={folder.id}
-                                                open={expandedFolders[folder.id]}
-                                                onOpenChange={() => toggleFolder(folder.id)}
-                                                className="mb-1"
-                                            >
-                                                <CollapsibleTrigger className="flex items-center w-full py-2 px-3 hover:bg-gray-100 rounded-md text-sm">
-                                                    <ChevronRight className={`h-4 w-4 mr-2 transition-transform ${expandedFolders[folder.id] ? 'transform rotate-90' : ''}`} />
-                                                    <FolderClosed className="h-4 w-4 mr-2 text-amber-500" />
-                                                    <span className="font-medium">{folder.name}</span>
-                                                    <span className="ml-auto text-xs text-gray-500">{folder.responses_count}</span>
-                                                </CollapsibleTrigger>
-                                                <CollapsibleContent>
-                                                    <div className="pl-9 space-y-1">
-                                                        {expandedFolders[folder.id] && folderResponses[folder.id] ? (
-                                                            folderResponses[folder.id].map((response) => (
-                                                                <div key={response.id}>
-                                                                    {renderResponseItem(
-                                                                        response,
-                                                                        () => handleSelectResponse(response.id)
-                                                                    )}
-                                                                </div>
-                                                            ))
-                                                        ) : (
-                                                            expandedFolders[folder.id] && (
-                                                                <div className="py-2 px-3 text-gray-500 text-sm">
-                                                                    {loading ? 'Loading responses...' : 'No responses in this folder'}
-                                                                </div>
-                                                            )
-                                                        )}
+                                folders.map((folder) => (
+                                    <Collapsible
+                                        key={`folder-${folder._id.toString()}`}
+                                        open={expandedFolders[folder._id]}
+                                        onOpenChange={() => toggleFolder(folder._id)}
+                                        className="mb-1"
+                                    >
+                                        <CollapsibleTrigger className="flex items-center w-full py-2 px-3 hover:bg-gray-100 rounded-md text-sm">
+                                            <ChevronRight className={`h-4 w-4 mr-2 transition-transform ${expandedFolders[folder._id] ? 'transform rotate-90' : ''}`} />
+                                            <FolderClosed className="h-4 w-4 mr-2 text-amber-500" />
+                                            <span className="font-medium">{folder.name}</span>
+                                            <span className="ml-auto text-xs text-gray-500">{folder.responses_count}</span>
+                                        </CollapsibleTrigger>
+                                        <CollapsibleContent>
+                                            <div className="pl-9 space-y-1">
+                                                {expandedFolders[folder._id] && folderResponses[folder._id] && folderResponses[folder._id].length > 0 ? (
+                                                    folderResponses[folder._id].map((response, index) => (
+                                                        <div key={getUniqueKey(response) || `folder-${folder._id}-resp-${index}`}>
+                                                            {renderResponseItem(
+                                                                response,
+                                                                () => handleSelectResponse(response.id)
+                                                            )}
+                                                        </div>
+                                                    ))
+                                                ) : expandedFolders[folder._id] ? (
+                                                    <div className="py-2 px-3 text-gray-500 text-sm">
+                                                        No responses in this folder
                                                     </div>
-                                                </CollapsibleContent>
-                                            </Collapsible>
-                                        ))
-                                    )}
-                                    {folders.length === 0 && !loading && (
-                                        <div className="text-center py-4 text-gray-500">No canned response folders found</div>
-                                    )}
-                                </>
+                                                ) : null}
+                                            </div>
+                                        </CollapsibleContent>
+                                    </Collapsible>
+                                ))
+                            )}
+                            {folders.length === 0 && !loading && (
+                                <div className="text-center py-4 text-gray-500">No canned response folders found</div>
                             )}
                         </ScrollArea>
                     </TabsContent>
@@ -269,8 +288,8 @@ const CannedResponseSelector = forwardRef(({ onSelectResponse }, ref) => {
                         <ScrollArea className="h-[50vh]">
                             <h3 className="font-medium text-sm mb-2 text-gray-500">Recently Used</h3>
                             {recentlyUsed.length > 0 ? (
-                                recentlyUsed.map((response) => (
-                                    <div key={response.id}>
+                                recentlyUsed.map((response, index) => (
+                                    <div key={getUniqueKey(response) || `recent-${index}`}>
                                         {renderResponseItem(
                                             response,
                                             () => handleSelectResponse(response.id)

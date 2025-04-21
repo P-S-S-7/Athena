@@ -23,7 +23,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import contactService from "@/services/contactService";
-import { companyMap } from "@/utils/freshdeskMappings";
+import { useData } from "@/contexts/DataContext";
 
 const MAX_OTHER_EMAILS = 9;
 
@@ -35,6 +35,7 @@ const MergeContactsDialog = ({ isOpen, onClose, onMerge, selectedContacts, conta
     const [primaryContactData, setPrimaryContactData] = useState(null);
     const [detailedContacts, setDetailedContacts] = useState([]);
     const [fetchingDetails, setFetchingDetails] = useState(true);
+    const { companyMap } = useData();
 
     const [mergeData, setMergeData] = useState({
         email: "",

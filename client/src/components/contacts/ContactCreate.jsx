@@ -16,7 +16,7 @@ import Sidebar from "../../utils/Sidebar";
 import Header from "../../utils/Header";
 import { ErrorProvider, useError } from "../../contexts/ErrorContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { companyMap } from "@/utils/freshdeskMappings";
+import { useData } from "../../contexts/DataContext";
 
 const ContactCreateContent = () => {
     const { contactId } = useParams();
@@ -24,6 +24,7 @@ const ContactCreateContent = () => {
     const { user } = useAuth();
     const { handleError } = useError();
     const isEditMode = Boolean(contactId);
+    const { companyMap } = useData();
 
     const [contactData, setContactData] = useState({
         name: "",
@@ -48,6 +49,7 @@ const ContactCreateContent = () => {
     const [formLoading, setFormLoading] = useState(isEditMode);
     const [fieldState, setFieldState] = useState({});
     const [errors, setErrors] = useState({});
+    const [isTouched, setIsTouched] = useState({});
 
     useEffect(() => {
         const fetchData = async () => {
@@ -88,6 +90,8 @@ const ContactCreateContent = () => {
     }, [contactId, isEditMode, handleError]);
 
     const handleChange = (field, value) => {
+        setIsTouched(prev => ({ ...prev, [field]: true }));
+
         if (field.includes('.')) {
             const [parent, child] = field.split('.');
             setContactData({
@@ -117,11 +121,60 @@ const ContactCreateContent = () => {
         });
 
         if (errors[field]) {
-            setErrors({
-                ...errors,
-                [field]: null
+            setErrors(prev => {
+                const updatedErrors = {...prev};
+                delete updatedErrors[field];
+                return updatedErrors;
             });
         }
+    };
+
+    const handleBlur = (field) => {
+        setIsTouched(prev => ({ ...prev, [field]: true }));
+        validateField(field);
+    };
+
+    const validateField = (field) => {
+        let newErrors = { ...errors };
+
+        switch (field) {
+            case 'name':
+                if (!contactData.name) {
+                    newErrors.name = "Full name is required";
+                } else {
+                    delete newErrors.name;
+                }
+                break;
+            case 'email':
+                if (contactData.email && !validateEmail(contactData.email)) {
+                    newErrors.email = "Email format is invalid";
+                } else {
+                    delete newErrors.email;
+                }
+                break;
+            case 'phone':
+                if (contactData.phone && !validatePhone(contactData.phone)) {
+                    newErrors.phone = "Phone must be an integer with at least 6 digits";
+                } else {
+                    delete newErrors.phone;
+                }
+                break;
+            case 'mobile':
+                if (contactData.mobile && !validatePhone(contactData.mobile)) {
+                    newErrors.mobile = "Mobile must be an integer with at least 6 digits";
+                } else {
+                    delete newErrors.mobile;
+                }
+                break;
+            case 'unique_external_id':
+                delete newErrors.unique_external_id;
+                break;
+            default:
+                break;
+        }
+
+        setErrors(newErrors);
+        return !newErrors[field];
     };
 
     const validateEmail = (email) => {
@@ -199,11 +252,20 @@ const ContactCreateContent = () => {
     };
 
     const validateForm = () => {
+        const allTouched = {
+            name: true,
+            email: true,
+            phone: true,
+            mobile: true,
+            unique_external_id: true
+        };
+        setIsTouched(prev => ({...prev, ...allTouched}));
+
         const newErrors = {};
         let isValid = true;
 
         if (!contactData.name) {
-            newErrors.name = "Name is required";
+            newErrors.name = "Full name is required";
             isValid = false;
         }
 
@@ -277,7 +339,36 @@ const ContactCreateContent = () => {
                 navigate("/contacts?refresh=true");
             }, 3000);
         } catch (error) {
-            handleError(error);
+            if (error.message) {
+                try {
+                    const errorData = JSON.parse(error.message);
+                    if (errorData.error) {
+                        // Handle different types of errors from the server
+                        if (errorData.error.includes('email')) {
+                            setErrors(prev => ({
+                                ...prev,
+                                email: errorData.error
+                            }));
+                            setIsTouched(prev => ({ ...prev, email: true }));
+                        }
+                        else if (errorData.error.includes('unique_external_id')) {
+                            setErrors(prev => ({
+                                ...prev,
+                                unique_external_id: errorData.error
+                            }));
+                            setIsTouched(prev => ({ ...prev, unique_external_id: true }));
+                        } else {
+                            handleError(error);
+                        }
+                    } else {
+                        handleError(error);
+                    }
+                } catch {
+                    handleError(error);
+                }
+            } else {
+                handleError(error);
+            }
         } finally {
             setLoading(false);
         }
@@ -315,7 +406,7 @@ const ContactCreateContent = () => {
                     <ToastContainer />
 
                     <Card className="p-6">
-                        <form onSubmit={handleSubmit} className="space-y-6">
+                        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
                             <Tabs defaultValue="basic">
                                 <TabsList className="mb-6">
                                     <TabsTrigger value="basic">Basic Information</TabsTrigger>
@@ -331,11 +422,11 @@ const ContactCreateContent = () => {
                                                     id="name"
                                                     value={contactData.name || ""}
                                                     onChange={(e) => handleChange("name", e.target.value)}
-                                                    required
+                                                    onBlur={() => handleBlur("name")}
                                                     placeholder="Enter contact's full name"
-                                                    className={errors.name ? "border-red-500" : ""}
+                                                    className={isTouched.name && errors.name ? "border-red-500" : ""}
                                                 />
-                                                {errors.name && (
+                                                {isTouched.name && errors.name && (
                                                     <p className="text-red-500 text-sm mt-1">{errors.name}</p>
                                                 )}
                                             </div>
@@ -368,10 +459,11 @@ const ContactCreateContent = () => {
                                                     type="email"
                                                     value={contactData.email}
                                                     onChange={(e) => handleChange("email", e.target.value)}
+                                                    onBlur={() => handleBlur("email")}
                                                     placeholder="Enter contact's email address"
-                                                    className={errors.email ? "border-red-500" : ""}
+                                                    className={isTouched.email && errors.email ? "border-red-500" : ""}
                                                 />
-                                                {errors.email && (
+                                                {isTouched.email && errors.email && (
                                                     <p className="text-red-500 text-sm mt-1">{errors.email}</p>
                                                 )}
                                             </div>
@@ -383,10 +475,11 @@ const ContactCreateContent = () => {
                                                         id="phone"
                                                         value={contactData.phone}
                                                         onChange={(e) => handleChange("phone", e.target.value)}
+                                                        onBlur={() => handleBlur("phone")}
                                                         placeholder="Enter phone number (min 6 digits)"
-                                                        className={errors.phone ? "border-red-500" : ""}
+                                                        className={isTouched.phone && errors.phone ? "border-red-500" : ""}
                                                     />
-                                                    {errors.phone && (
+                                                    {isTouched.phone && errors.phone && (
                                                         <p className="text-red-500 text-sm mt-1">{errors.phone}</p>
                                                     )}
                                                 </div>
@@ -397,10 +490,11 @@ const ContactCreateContent = () => {
                                                         id="mobile"
                                                         value={contactData.mobile}
                                                         onChange={(e) => handleChange("mobile", e.target.value)}
+                                                        onBlur={() => handleBlur("mobile")}
                                                         placeholder="Enter mobile number (min 6 digits)"
-                                                        className={errors.mobile ? "border-red-500" : ""}
+                                                        className={isTouched.mobile && errors.mobile ? "border-red-500" : ""}
                                                     />
-                                                    {errors.mobile && (
+                                                    {isTouched.mobile && errors.mobile && (
                                                         <p className="text-red-500 text-sm mt-1">{errors.mobile}</p>
                                                     )}
                                                 </div>
@@ -412,8 +506,13 @@ const ContactCreateContent = () => {
                                                     id="unique_external_id"
                                                     value={contactData.unique_external_id}
                                                     onChange={(e) => handleChange("unique_external_id", e.target.value)}
+                                                    onBlur={() => handleBlur("unique_external_id")}
                                                     placeholder="Enter unique ID"
+                                                    className={isTouched.unique_external_id && errors.unique_external_id ? "border-red-500" : ""}
                                                 />
+                                                {isTouched.unique_external_id && errors.unique_external_id && (
+                                                    <p className="text-red-500 text-sm mt-1">{errors.unique_external_id}</p>
+                                                )}
                                             </div>
 
                                             <div>

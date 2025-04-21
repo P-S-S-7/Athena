@@ -6,6 +6,7 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [authInitialized, setAuthInitialized] = useState(false);
 
     const fetchUserProfile = async () => {
         try {
@@ -23,8 +24,29 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const validateAuth = async () => {
+        try {
+            const response = await axios.get(
+                `${import.meta.env.VITE_API_URL}/users/validate_token`,
+                { withCredentials: true }
+            );
+
+            if (response.data.valid) {
+                await fetchUserProfile();
+            } else {
+                setUser(null);
+            }
+        } catch (error) {
+            console.error("Token validation failed:", error);
+            setUser(null);
+        } finally {
+            setLoading(false);
+            setAuthInitialized(true);
+        }
+    };
+
     useEffect(() => {
-        fetchUserProfile();
+        validateAuth();
 
         const interceptor = axios.interceptors.response.use(
             response => response,
@@ -61,7 +83,8 @@ export const AuthProvider = ({ children }) => {
         loading,
         fetchUserProfile,
         logout,
-        isAuthenticated: !!user
+        isAuthenticated: !!user,
+        authInitialized
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

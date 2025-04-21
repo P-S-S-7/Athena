@@ -185,8 +185,8 @@ const ContactDetailsContent = () => {
                             <CardContent className="pt-6">
                                 <div className="flex flex-col items-center text-center mb-6">
                                     <Avatar className="h-24 w-24 mb-4">
-                                        {contact.avatar && contact.avatar.avatar_url ? (
-                                            <AvatarImage src={contact.avatar.avatar_url} alt={contact.name} />
+                                        {contact.avatar && contact.avatar.attachment_url ? (
+                                            <AvatarImage src={contact.avatar.attachment_url} alt={contact.name} />
                                         ) : null}
                                         <AvatarFallback className="text-3xl bg-blue-100 text-blue-800">
                                             {contact.name ? contact.name.charAt(0).toUpperCase() : "?"}

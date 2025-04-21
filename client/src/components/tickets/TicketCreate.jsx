@@ -6,23 +6,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { PaperclipIcon, Loader2 } from "lucide-react";
 import ticketService from "@/services/ticketService";
-import { showSuccessToast, ToastContainer } from "../../utils/toast";
+import { showSuccessToast, showErrorToast, ToastContainer } from "../../utils/toast";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
-import { statusMap, priorityMap, sourceMap, typeArray, agentMap, groupMap, contactMap, contactEmailMap } from "@/utils/freshdeskMappings";
 import RichTextEditor from "@/utils/RichTextEditor";
 import groupService from "@/services/groupService";
 import { useAuth } from "../../contexts/AuthContext";
 import Sidebar from "../../utils/Sidebar";
 import Header from "../../utils/Header";
 import { ErrorProvider, useError } from "../../contexts/ErrorContext";
+import { useData } from "../../contexts/DataContext";
 
 const TicketCreateContent = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { handleError } = useError();
     const location = useLocation();
+    const { statusMap, priorityMap, sourceMap, typeArray, agentMap, contactMap, contactEmailMap, groupMap } = useData();
 
     const [ticketData, setTicketData] = useState({
         subject: "",
@@ -38,7 +39,9 @@ const TicketCreateContent = () => {
     const [attachments, setAttachments] = useState([]);
     const [loading, setLoading] = useState(false);
     const [tagInput, setTagInput] = useState("");
-    const [availableAgents, setAvailableAgents] = useState([]);
+    const [availableAgents, setAvailableAgents] = useState({});
+    const [errors, setErrors] = useState({});
+    const [isTouched, setIsTouched] = useState({});
 
     useEffect(() => {
         const fetchGroupAgents = async () => {
@@ -62,9 +65,11 @@ const TicketCreateContent = () => {
         };
 
         fetchGroupAgents();
-    }, [ticketData.group_id, handleError]);
+    }, [ticketData.group_id, agentMap, handleError]);
 
     const handleChange = (field, value) => {
+        setIsTouched(prev => ({ ...prev, [field]: true }));
+
         if (value === null || value === "null") {
             const newData = { ...ticketData };
             delete newData[field];
@@ -83,6 +88,60 @@ const TicketCreateContent = () => {
                 });
             }
         }
+
+        if (errors[field]) {
+            setErrors(prev => {
+                const updatedErrors = {...prev};
+                delete updatedErrors[field];
+                return updatedErrors;
+            });
+        }
+    };
+
+    const handleBlur = (field) => {
+        setIsTouched(prev => ({ ...prev, [field]: true }));
+        validateField(field);
+    };
+
+    const validateField = (field) => {
+        let newErrors = { ...errors };
+
+        switch (field) {
+            case 'subject':
+                if (!ticketData.subject) {
+                    newErrors.subject = "Subject is required";
+                } else {
+                    delete newErrors.subject;
+                }
+                break;
+            case 'description':
+                if (!ticketData.description) {
+                    newErrors.description = "Description is required";
+                } else {
+                    delete newErrors.description;
+                }
+                break;
+            case 'requester_id':
+                if (!ticketData.requester_id) {
+                    newErrors.requester_id = "Contact is required";
+                } else {
+                    delete newErrors.requester_id;
+                }
+                break;
+            case 'source':
+                const validSources = ["1", "2", "3", "5", "6", "7", "9", "10"];
+                if (!validSources.includes(ticketData.source)) {
+                    newErrors.source = "Source value is invalid";
+                } else {
+                    delete newErrors.source;
+                }
+                break;
+            default:
+                break;
+        }
+
+        setErrors(newErrors);
+        return !newErrors[field];
     };
 
     const handleFileChange = (e) => {
@@ -115,17 +174,40 @@ const TicketCreateContent = () => {
         });
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const validateForm = () => {
+        const allTouched = Object.keys(ticketData).reduce((acc, key) => {
+            acc[key] = true;
+            return acc;
+        }, {});
+        setIsTouched(allTouched);
 
-        if (!ticketData.subject || !ticketData.description || !ticketData.requester_id) {
-            handleError(new Error("Subject, Description, and Contact are required."));
-            return;
+        const newErrors = {};
+
+        if (!ticketData.subject) {
+            newErrors.subject = "Subject is required";
+        }
+
+        if (!ticketData.description) {
+            newErrors.description = "Description is required";
+        }
+
+        if (!ticketData.requester_id) {
+            newErrors.requester_id = "Contact is required";
         }
 
         const validSources = ["1", "2", "3", "5", "6", "7", "9", "10"];
         if (!validSources.includes(ticketData.source)) {
-            handleError(new Error("Source value is invalid. Please select a valid source."));
+            newErrors.source = "Source value is invalid. Please select a valid source.";
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+
+        if (!validateForm()) {
             return;
         }
 
@@ -164,7 +246,7 @@ const TicketCreateContent = () => {
 
             navigate("/tickets");
         } catch (error) {
-            handleError(error);
+            showErrorToast(error.message || "Failed to create ticket");
         } finally {
             setLoading(false);
         }
@@ -187,16 +269,19 @@ const TicketCreateContent = () => {
 
                 <main className="flex-grow p-6 overflow-auto">
                     <Card className="p-6">
-                        <form onSubmit={handleSubmit} className="space-y-6">
+                        <form onSubmit={handleSubmit} className="space-y-6" noValidate>
                             <div className="space-y-4">
                                 <div>
                                     <Label htmlFor="contact" className="required mb-2">Contact *</Label>
                                     <Select
                                         value={ticketData.requester_id || ""}
                                         onValueChange={(value) => handleChange("requester_id", value)}
-                                        required
                                     >
-                                        <SelectTrigger id="contact">
+                                        <SelectTrigger
+                                            id="contact"
+                                            className={isTouched.requester_id && errors.requester_id ? "border-red-500" : ""}
+                                            onBlur={() => handleBlur("requester_id")}
+                                        >
                                             <SelectValue placeholder="Select contact" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -207,6 +292,9 @@ const TicketCreateContent = () => {
                                             ))}
                                         </SelectContent>
                                     </Select>
+                                    {isTouched.requester_id && errors.requester_id &&
+                                        <p className="text-sm text-red-500 mt-1">{errors.requester_id}</p>
+                                    }
                                 </div>
 
                                 <div>
@@ -215,9 +303,13 @@ const TicketCreateContent = () => {
                                         id="subject"
                                         value={ticketData.subject}
                                         onChange={(e) => handleChange("subject", e.target.value)}
-                                        required
+                                        onBlur={() => handleBlur("subject")}
                                         placeholder="Enter ticket subject"
+                                        className={isTouched.subject && errors.subject ? "border-red-500" : ""}
                                     />
+                                    {isTouched.subject && errors.subject &&
+                                        <p className="text-sm text-red-500 mt-1">{errors.subject}</p>
+                                    }
                                 </div>
 
                                 <div>
@@ -229,8 +321,21 @@ const TicketCreateContent = () => {
                                                 ...prevData,
                                                 description: value
                                             }));
+
+                                            if (isTouched.description && errors.description) {
+                                                setErrors(prev => {
+                                                    const updatedErrors = {...prev};
+                                                    if (value) delete updatedErrors.description;
+                                                    return updatedErrors;
+                                                });
+                                            }
                                         }}
+                                        onBlur={() => handleBlur("description")}
+                                        className={isTouched.description && errors.description ? "border-red-500" : ""}
                                     />
+                                    {isTouched.description && errors.description &&
+                                        <p className="text-sm text-red-500 mt-1">{errors.description}</p>
+                                    }
                                     <p className="text-xs text-gray-500 mt-1">
                                         Format your text using the toolbar above. You can also upload images, insert tables, and add code blocks.
                                     </p>
@@ -242,7 +347,6 @@ const TicketCreateContent = () => {
                                         <Select
                                             value={ticketData.status}
                                             onValueChange={(value) => handleChange("status", value)}
-                                            required
                                         >
                                             <SelectTrigger id="status">
                                                 <SelectValue placeholder="Select status" />
@@ -260,7 +364,6 @@ const TicketCreateContent = () => {
                                         <Select
                                             value={ticketData.priority}
                                             onValueChange={(value) => handleChange("priority", value)}
-                                            required
                                         >
                                             <SelectTrigger id="priority">
                                                 <SelectValue placeholder="Select priority" />
@@ -315,7 +418,7 @@ const TicketCreateContent = () => {
                                         <Select
                                             value={ticketData.responder_id || "null"}
                                             onValueChange={(value) => handleChange("responder_id", value === "null" ? null : value)}
-                                            disabled={!ticketData.group_id && Object.keys(availableAgents).length === 0}
+                                            disabled={Object.keys(availableAgents).length === 0}
                                         >
                                             <SelectTrigger id="agent">
                                                 <SelectValue placeholder="Select agent" />
@@ -335,8 +438,9 @@ const TicketCreateContent = () => {
                                     <Select
                                         value={ticketData.source}
                                         onValueChange={(value) => handleChange("source", value)}
+                                        onBlur={() => handleBlur("source")}
                                     >
-                                        <SelectTrigger id="source">
+                                        <SelectTrigger id="source" className={isTouched.source && errors.source ? "border-red-500" : ""}>
                                             <SelectValue placeholder="Select source" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -348,6 +452,9 @@ const TicketCreateContent = () => {
                                             }
                                         </SelectContent>
                                     </Select>
+                                    {isTouched.source && errors.source &&
+                                        <p className="text-sm text-red-500 mt-1">{errors.source}</p>
+                                    }
                                 </div>
 
                                 <div>

@@ -7,24 +7,26 @@ import TicketFilters from "./TicketFilters";
 import TicketCard from "./layouts/TicketCard";
 import TicketTable from "./layouts/TicketTable";
 import { showSuccessToast, ToastContainer } from "../../utils/toast";
-import { statusMap, priorityMap, sourceMap, agentMap, groupMap } from "@/utils/freshdeskMappings";
 import { useError } from "@/contexts/ErrorContext";
+import { useData } from "@/contexts/DataContext";
+import { Download } from "lucide-react";
 
 const TicketsList = ({ refreshTrigger, onRefresh }) => {
-    const [allTickets, setAllTickets] = useState([]);
+    const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedTickets, setSelectedTickets] = useState([]);
     const [view, setView] = useState("card");
     const [sortBy, setSortBy] = useState("created_at");
     const [sortOrder, setSortOrder] = useState("desc");
     const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(10);
-    const [filteredTickets, setFilteredTickets] = useState([]);
+    const [perPage, setPerPage] = useState(20);
+    const [totalTickets, setTotalTickets] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
     const [activeFilters, setActiveFilters] = useState({});
     const [filterKey, setFilterKey] = useState(0);
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
     const [localRefreshKey, setLocalRefreshKey] = useState(0);
-
+    const { agentMap, statusMap, priorityMap, sourceMap, groupMap } = useData();
     const { handleError } = useError();
 
     const combinedRefreshTrigger = useMemo(() => {
@@ -39,59 +41,34 @@ const TicketsList = ({ refreshTrigger, onRefresh }) => {
     };
 
     useEffect(() => {
-        const fetchTicketsData = async () => {
-            try {
-                setLoading(true);
+  const fetchTicketsData = async () => {
+    try {
+      setLoading(true);
 
-                const response = await ticketService.getTickets(sortBy, sortOrder);
-                setAllTickets(response.tickets);
+      const response = await ticketService.getTickets(
+        sortBy,
+        sortOrder,
+        page,
+        perPage,
+        activeFilters
+      );
 
-                if (Object.keys(activeFilters).length > 0) {
-                    const filtered = ticketService.filterTickets(response.tickets, activeFilters);
-                    setFilteredTickets(filtered);
-                } else {
-                    setFilteredTickets(response.tickets);
-                }
-            } catch (error) {
-                handleError(error);
-            } finally {
-                setLoading(false);
-            }
-        };
+      setTickets(response.tickets);
+      setTotalTickets(response.meta.total);
+      setTotalPages(response.meta.total_pages);
+    } catch (error) {
+      handleError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        fetchTicketsData();
-    }, [sortBy, sortOrder, combinedRefreshTrigger, handleError]);
-
-    useEffect(() => {
-        if (view === "table") {
-            setPerPage(20);
-        } else if (view === "card") {
-            setPerPage(10);
-        }
-    }, [view]);
-
-    const paginatedData = useMemo(() => {
-        const totalTickets = filteredTickets.length;
-        const totalPages = Math.ceil(totalTickets / perPage);
-
-        const startIndex = (page - 1) * perPage;
-        const endIndex = Math.min(startIndex + perPage, totalTickets);
-        const currentTickets = filteredTickets.slice(startIndex, endIndex);
-
-        return {
-            currentTickets,
-            totalTickets,
-            totalPages
-        };
-    }, [filteredTickets, page, perPage]);
-
-    useEffect(() => {
-        setPage(1);
-    }, [filteredTickets]);
+  fetchTicketsData();
+}, [sortBy, sortOrder, page, perPage, combinedRefreshTrigger, activeFilters, handleError]);
 
     const handleSelectAll = (checked) => {
         if (checked) {
-            setSelectedTickets(paginatedData.currentTickets.map(ticket => ticket.id));
+            setSelectedTickets(tickets.map(ticket => ticket.id));
         } else {
             setSelectedTickets([]);
         }
@@ -154,13 +131,7 @@ const TicketsList = ({ refreshTrigger, onRefresh }) => {
     };
 
     const handleTicketUpdate = (updatedTicket) => {
-        setAllTickets(tickets =>
-            tickets.map(ticket =>
-                ticket.id === updatedTicket.id ? updatedTicket : ticket
-            )
-        );
-
-        setFilteredTickets(tickets =>
+        setTickets(tickets =>
             tickets.map(ticket =>
                 ticket.id === updatedTicket.id ? updatedTicket : ticket
             )
@@ -168,53 +139,51 @@ const TicketsList = ({ refreshTrigger, onRefresh }) => {
     };
 
     const handleFilterApply = (filterParams) => {
-        try {
-            setLoading(true);
+  try {
+    const cleanParams = {};
 
-            const cleanParams = {};
-
-            Object.entries(filterParams).forEach(([key, value]) => {
-                if (value !== "" && value !== null && value !== undefined) {
-                    cleanParams[key] = value;
-                }
-            });
-
-            setActiveFilters(cleanParams);
-
-            const filtered = ticketService.filterTickets(allTickets, cleanParams);
-            setFilteredTickets(filtered);
-
-            setPage(1);
-        } catch (error) {
-            handleError(error);
-            setFilteredTickets(allTickets);
-        } finally {
-            setLoading(false);
+    Object.entries(filterParams).forEach(([key, value]) => {
+      if (value !== "" && value !== null && value !== undefined) {
+        // For array values (like multi-select), only include if they have elements
+        if (Array.isArray(value)) {
+          if (value.length > 0) {
+            cleanParams[key] = value;
+          }
+        } else {
+          cleanParams[key] = value;
         }
-    };
+      }
+    });
+
+    setActiveFilters(cleanParams);
+    setPage(1); // Reset to first page when applying filters
+  } catch (error) {
+    handleError(error);
+  }
+};
 
     const handleSort = (field, order) => {
         setSortBy(field);
         setSortOrder(order);
-
-        const sorted = [...filteredTickets].sort((a, b) => {
-            if (order === 'asc') {
-                return a[field] > b[field] ? 1 : -1;
-            } else {
-                return a[field] < b[field] ? 1 : -1;
-            }
-        });
-
-        setFilteredTickets(sorted);
+        setPage(1);
     };
 
     const clearFilters = () => {
         setActiveFilters({});
-        setFilteredTickets(allTickets);
         setFilterKey(prevKey => prevKey + 1);
+        setPage(1);
     };
 
-    if (loading) {
+    const handleExport = async () => {
+        try {
+            await ticketService.exportTickets();
+            showSuccessToast("Tickets exported successfully");
+        } catch (error) {
+            handleError(error);
+        }
+    };
+
+    if (loading && page === 1) {
         return <div className="text-center py-10">Loading tickets...</div>;
     }
 
@@ -226,7 +195,7 @@ const TicketsList = ({ refreshTrigger, onRefresh }) => {
                 <div className="flex items-center space-x-2">
                     <Checkbox
                         id="select-all"
-                        checked={selectedTickets.length === paginatedData.currentTickets.length && paginatedData.currentTickets.length > 0}
+                        checked={selectedTickets.length === tickets.length && tickets.length > 0}
                         onCheckedChange={handleSelectAll}
                         disabled={bulkActionLoading}
                     />
@@ -328,6 +297,10 @@ const TicketsList = ({ refreshTrigger, onRefresh }) => {
                         </Button>
                     )}
 
+                    <Button variant="outline" onClick={handleExport}>
+                        <Download className="h-4 w-4 mr-1" /> Export
+                    </Button>
+
                     <div className="flex items-center space-x-2">
                         <span className="text-sm font-medium">Layout:</span>
                         <Select value={view} onValueChange={setView}>
@@ -341,11 +314,9 @@ const TicketsList = ({ refreshTrigger, onRefresh }) => {
                         </Select>
                     </div>
 
-                    <Button variant="outline">Export</Button>
-
                     <div className="text-sm text-gray-500">
-                        {paginatedData.currentTickets.length > 0 ? (
-                            `${(page - 1) * perPage + 1}-${Math.min(page * perPage, paginatedData.totalTickets)} of ${paginatedData.totalTickets}`
+                        {tickets.length > 0 ? (
+                            `${(page - 1) * perPage + 1}-${Math.min(page * perPage, totalTickets)} of ${totalTickets}`
                         ) : (
                             '0-0 of 0'
                         )}
@@ -363,8 +334,8 @@ const TicketsList = ({ refreshTrigger, onRefresh }) => {
                         <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setPage(p => Math.min(paginatedData.totalPages, p + 1))}
-                            disabled={page === paginatedData.totalPages || paginatedData.totalPages === 0}
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            disabled={page === totalPages || totalPages === 0}
                         >
                             &#187;
                         </Button>
@@ -374,10 +345,12 @@ const TicketsList = ({ refreshTrigger, onRefresh }) => {
 
             <div className="flex space-x-4">
                 <div className="w-3/4">
-                    {view === "card" ? (
+                    {loading && page > 1 ? (
+                        <div className="text-center py-10">Loading tickets...</div>
+                    ) : view === "card" ? (
                         <div className="flex flex-col space-y-4">
-                            {paginatedData.currentTickets.length > 0 ? (
-                                paginatedData.currentTickets.map(ticket => (
+                            {tickets.length > 0 ? (
+                                tickets.map(ticket => (
                                     <TicketCard
                                         key={`${ticket.id}-${ticket.status}-${ticket.responder_id}`}
                                         ticket={ticket}
@@ -399,7 +372,7 @@ const TicketsList = ({ refreshTrigger, onRefresh }) => {
                         </div>
                     ) : (
                         <TicketTable
-                            tickets={paginatedData.currentTickets}
+                            tickets={tickets}
                             selectedTickets={selectedTickets}
                             onSelectTicket={handleSelectTicket}
                             statuses={statusMap}
@@ -408,7 +381,7 @@ const TicketsList = ({ refreshTrigger, onRefresh }) => {
                         />
                     )}
 
-                    {paginatedData.totalPages > 1 && (
+                    {totalPages > 1 && (
                         <div className="flex justify-center mt-6">
                             <div className="flex items-center space-x-2">
                                 <Button
@@ -429,14 +402,14 @@ const TicketsList = ({ refreshTrigger, onRefresh }) => {
                                 </Button>
 
                                 <div className="flex items-center space-x-1 mx-2">
-                                    {[...Array(Math.min(5, paginatedData.totalPages))].map((_, i) => {
+                                    {[...Array(Math.min(5, totalPages))].map((_, i) => {
                                         let pageNum;
-                                        if (paginatedData.totalPages <= 5) {
+                                        if (totalPages <= 5) {
                                             pageNum = i + 1;
                                         } else if (page <= 3) {
                                             pageNum = i + 1;
-                                        } else if (page >= paginatedData.totalPages - 2) {
-                                            pageNum = paginatedData.totalPages - 4 + i;
+                                        } else if (page >= totalPages - 2) {
+                                            pageNum = totalPages - 4 + i;
                                         } else {
                                             pageNum = page - 2 + i;
                                         }
@@ -458,16 +431,16 @@ const TicketsList = ({ refreshTrigger, onRefresh }) => {
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => setPage(p => Math.min(paginatedData.totalPages, p + 1))}
-                                    disabled={page === paginatedData.totalPages || paginatedData.totalPages === 0}
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages || totalPages === 0}
                                 >
                                     Next
                                 </Button>
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => setPage(paginatedData.totalPages)}
-                                    disabled={page === paginatedData.totalPages || paginatedData.totalPages === 0}
+                                    onClick={() => setPage(totalPages)}
+                                    disabled={page === totalPages || totalPages === 0}
                                 >
                                     Last
                                 </Button>

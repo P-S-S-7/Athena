@@ -4,9 +4,16 @@ class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
 
         if user.present?
             sign_out_all_scopes
-            sign_in user
 
-            cookies[:user_id] = { value: user.uid, httponly: true, secure: true, same_site: :strict }
+            token = JwtService.encode({ user_id: user.id })
+
+            cookies[:jwt] = {
+                value: token,
+                httponly: true,
+                secure: Rails.env.production?,
+                expires: 7.days.from_now,
+                same_site: :lax
+            }
 
             redirect_to "#{ENV['FRONTEND_URL']}/login?status=success"
         else

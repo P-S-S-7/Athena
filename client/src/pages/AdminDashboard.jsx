@@ -35,12 +35,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { groupMap } from '@/utils/freshdeskMappings';
+import { useData } from "@/contexts/DataContext";
 
 const AdminDashboard = () => {
     const location = useLocation();
     const { user } = useAuth();
     const [isProfileLoaded, setIsProfileLoaded] = useState(false);
+    const { groupMap } = useData();
     const [dashboardData, setDashboardData] = useState({
         ticketStats: {
             unresolved: 0,
@@ -112,7 +113,7 @@ const AdminDashboard = () => {
                 }).length;
                 const openCount = tickets.filter(ticket => ticket.status === 2).length;
                 const onHoldCount = tickets.filter(ticket => ticket.status === 3).length;
-                const unassignedCount = tickets.filter(ticket => ticket.responder_id === null && ticket.status !== 5).length;
+                const unassignedCount = tickets.filter(ticket => ticket.responder_id === null && ticket.status !== 5 && ticket.group_id === null).length;
 
                 const totalResponses = 150;
                 const positivePercentage = 80;

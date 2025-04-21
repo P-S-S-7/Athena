@@ -12,19 +12,23 @@ Rails.application.routes.draw do
 
     get '/users/role', to: 'users#role'
     get '/users/profile', to: 'users#profile'
+    get '/users/validate_token', to: 'users#validate_token'
+
+    post "/webhooks/freshdesk", to: "webhooks#freshdesk"
 
     namespace :api do
         resources :tickets do
             collection do
                 get :fields
                 get :count
+                get :export
             end
             member do
                 get :conversations
                 post :reply
                 post :note
                 post :forward
-                post :merge
+                put :merge
             end
         end
 
@@ -41,8 +45,20 @@ Rails.application.routes.draw do
                 get :fields
                 get :count
                 post :merge
-                get :companies
+                get :export
             end
+        end
+
+        resources :companies do
+            collection do
+                get :fields
+            end
+        end
+
+        resources :sync, only: [] do
+          collection do
+            post :sync_all
+          end
         end
     end
 end

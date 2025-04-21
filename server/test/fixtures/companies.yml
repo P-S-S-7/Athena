@@ -1,0 +1,31 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  gid: MyString
+  freshdesk_id: 
+  name: MyString
+  description: MyText
+  note: MyText
+  health_score: MyString
+  account_tier: MyString
+  renewal_date: 2025-03-28 14:41:14
+  industry: MyString
+  org_company_id: MyString
+  domains: 
+  created_at: 2025-03-28 14:41:14
+  updated_at: 2025-03-28 14:41:14
+
+two:
+  gid: MyString
+  freshdesk_id: 
+  name: MyString
+  description: MyText
+  note: MyText
+  health_score: MyString
+  account_tier: MyString
+  renewal_date: 2025-03-28 14:41:14
+  industry: MyString
+  org_company_id: MyString
+  domains: 
+  created_at: 2025-03-28 14:41:14
+  updated_at: 2025-03-28 14:41:14

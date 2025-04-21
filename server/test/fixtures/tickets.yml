@@ -1,0 +1,61 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  gid: MyString
+  freshdesk_id: 
+  priority: 1
+  source: 1
+  status: 1
+  subject: MyText
+  ticket_type: MyString
+  due_by: 2025-03-28 16:52:01
+  fr_due_by: 2025-03-28 16:52:01
+  is_escalated: false
+  created_at: 2025-03-28 16:52:01
+  updated_at: 2025-03-28 16:52:01
+  nr_due_by: 2025-03-28 16:52:01
+  nr_escalated: false
+  email_config_id: 1
+  product_id: 1
+  fr_escalated: false
+  spam: false
+  association_type: MyString
+  support_email: MyString
+  sentiment_score: 1.5
+  initial_sentiment_score: 1.5
+  source_additional_info: MyText
+  is_deleted: false
+  requester: one
+  responder: one
+  company: one
+  group: one
+
+two:
+  gid: MyString
+  freshdesk_id: 
+  priority: 1
+  source: 1
+  status: 1
+  subject: MyText
+  ticket_type: MyString
+  due_by: 2025-03-28 16:52:01
+  fr_due_by: 2025-03-28 16:52:01
+  is_escalated: false
+  created_at: 2025-03-28 16:52:01
+  updated_at: 2025-03-28 16:52:01
+  nr_due_by: 2025-03-28 16:52:01
+  nr_escalated: false
+  email_config_id: 1
+  product_id: 1
+  fr_escalated: false
+  spam: false
+  association_type: MyString
+  support_email: MyString
+  sentiment_score: 1.5
+  initial_sentiment_score: 1.5
+  source_additional_info: MyText
+  is_deleted: false
+  requester: two
+  responder: two
+  company: two
+  group: two

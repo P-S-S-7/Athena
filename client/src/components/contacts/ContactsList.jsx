@@ -34,23 +34,27 @@ import ContactFilters from "./ContactFilters";
 import { showSuccessToast, ToastContainer } from "../../utils/toast";
 import { useError } from "@/contexts/ErrorContext";
 import MergeContactsDialog from "./MergeContactsDialog";
+import { useData } from "@/contexts/DataContext";
 
 const ContactsList = ({ refreshTrigger, onRefresh }) => {
-    const [allContacts, setAllContacts] = useState([]);
+    const [contacts, setContacts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedContacts, setSelectedContacts] = useState([]);
     const [sortBy, setSortBy] = useState("name");
     const [sortOrder, setSortOrder] = useState("asc");
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(50);
-    const [filteredContacts, setFilteredContacts] = useState([]);
+    const [totalContacts, setTotalContacts] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
     const [activeFilters, setActiveFilters] = useState({});
     const [filterKey, setFilterKey] = useState(0);
     const [showFilters, setShowFilters] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [searchTimeout, setSearchTimeout] = useState(null);
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
     const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
     const [localRefreshKey, setLocalRefreshKey] = useState(0);
+    const { companyMap } = useData();
 
     const navigate = useNavigate();
     const { handleError } = useError();
@@ -66,76 +70,69 @@ const ContactsList = ({ refreshTrigger, onRefresh }) => {
         }
     };
 
-    useEffect(() => {
-        const fetchContactsData = async () => {
-            try {
-                setLoading(true);
+    const loadContacts = async (resetPage = false) => {
+        try {
+            setLoading(true);
 
-                const response = await contactService.getContacts(sortBy, sortOrder);
-                setAllContacts(response.contacts);
-
-                let filtered = response.contacts;
-                if (searchQuery) {
-                    filtered = filtered.filter(contact =>
-                        contact.name?.toLowerCase().includes(searchQuery.toLowerCase())
-                    );
-                }
-
-                if (Object.keys(activeFilters).length > 0) {
-                    filtered = contactService.filterContacts(filtered, activeFilters);
-                }
-
-                setFilteredContacts(filtered);
-            } catch (error) {
-                handleError(error);
-            } finally {
-                setLoading(false);
+            const currentPage = resetPage ? 1 : page;
+            if (resetPage) {
+                setPage(1);
             }
-        };
 
-        fetchContactsData();
-    }, [sortBy, sortOrder, searchQuery, combinedRefreshTrigger, handleError]);
-
-    useEffect(() => {
-        if (allContacts.length > 0) {
-            let filtered = allContacts;
+            // Combine all filters including search query
+            const combinedFilters = {
+                ...activeFilters
+            };
 
             if (searchQuery) {
-                filtered = filtered.filter(contact =>
-                    contact.name?.toLowerCase().includes(searchQuery.toLowerCase())
-                );
+                combinedFilters.search = searchQuery;
             }
 
-            if (Object.keys(activeFilters).length > 0) {
-                filtered = contactService.filterContacts(filtered, activeFilters);
-            }
+            const response = await contactService.getContacts(
+                sortBy,
+                sortOrder,
+                currentPage,
+                perPage,
+                combinedFilters
+            );
 
-            setFilteredContacts(filtered);
+            setContacts(response.contacts);
+            setTotalContacts(response.meta.total);
+            setTotalPages(response.meta.total_pages);
+        } catch (error) {
+            handleError(error);
+        } finally {
+            setLoading(false);
         }
-    }, [activeFilters, allContacts, searchQuery]);
+    };
 
-    const paginatedData = useMemo(() => {
-        const totalContacts = filteredContacts.length;
-        const totalPages = Math.ceil(totalContacts / perPage);
-
-        const startIndex = (page - 1) * perPage;
-        const endIndex = Math.min(startIndex + perPage, totalContacts);
-        const currentContacts = filteredContacts.slice(startIndex, endIndex);
-
-        return {
-            currentContacts,
-            totalContacts,
-            totalPages
-        };
-    }, [filteredContacts, page, perPage]);
-
+    // Load contacts on initial load and when dependencies change
     useEffect(() => {
-        setPage(1);
-    }, [filteredContacts]);
+        loadContacts();
+    }, [sortBy, sortOrder, page, perPage, combinedRefreshTrigger]);
+
+    // Handle search with debounce
+    useEffect(() => {
+        if (searchTimeout) {
+            clearTimeout(searchTimeout);
+        }
+
+        const timeoutId = setTimeout(() => {
+            loadContacts(true); // Reset to page 1 when search changes
+        }, 500); // 500ms delay
+
+        setSearchTimeout(timeoutId);
+
+        return () => {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+        };
+    }, [searchQuery, activeFilters]);
 
     const handleSelectAll = (checked) => {
         if (checked) {
-            setSelectedContacts(paginatedData.currentContacts.map(contact => contact.id));
+            setSelectedContacts(contacts.map(contact => contact.id));
         } else {
             setSelectedContacts([]);
         }
@@ -221,27 +218,40 @@ const ContactsList = ({ refreshTrigger, onRefresh }) => {
     };
 
     const handleFilterApply = (filterParams) => {
-        setActiveFilters(filterParams);
+        const cleanParams = {};
+
+        Object.entries(filterParams).forEach(([key, value]) => {
+            if (value !== "" && value !== null && value !== undefined) {
+                cleanParams[key] = value;
+            }
+        });
+
+        setActiveFilters(cleanParams);
+        // No need to call loadContacts here as it will be triggered by the useEffect
     };
 
     const clearFilters = () => {
         setActiveFilters({});
         setSearchQuery('');
         setFilterKey(prevKey => prevKey + 1);
+        // No need to call loadContacts here as it will be triggered by the useEffect
     };
 
     const handleSort = (field) => {
-        if (sortBy === field) {
-            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-        } else {
-            setSortBy(field);
-            setSortOrder('asc');
-        }
+        const newOrder = sortBy === field && sortOrder === 'asc' ? 'desc' : 'asc';
+        setSortBy(field);
+        setSortOrder(newOrder);
+        // No need to set page=1 here as loadContacts will be triggered by the useEffect
     };
 
-    if (loading && allContacts.length === 0) {
-        return <div className="text-center py-10">Loading contacts...</div>;
-    }
+    const handleExport = async () => {
+        try {
+            await contactService.exportContacts();
+            showSuccessToast("Contacts exported successfully", { autoClose: 3000 });
+        } catch (error) {
+            handleError(error);
+        }
+    };
 
     const getSortIcon = (field) => {
         if (sortBy !== field) return null;
@@ -251,13 +261,19 @@ const ContactsList = ({ refreshTrigger, onRefresh }) => {
             : <span className="ml-1">↓</span>;
     };
 
+    if (loading && page === 1) {
+        return <div className="text-center py-10">Loading contacts...</div>;
+    }
+
     return (
         <div className="space-y-4">
+            <ToastContainer />
+
             <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center space-x-2">
                     <Checkbox
                         id="select-all"
-                        checked={selectedContacts.length === paginatedData.currentContacts.length && paginatedData.currentContacts.length > 0}
+                        checked={selectedContacts.length === contacts.length && contacts.length > 0}
                         onCheckedChange={handleSelectAll}
                         disabled={bulkActionLoading}
                     />
@@ -315,16 +331,13 @@ const ContactsList = ({ refreshTrigger, onRefresh }) => {
                         {showFilters ? "Hide Filters" : "Show Filters"}
                     </Button>
 
-                    <Button variant="outline">
-                        <Upload className="h-4 w-4 mr-1" /> Import
-                    </Button>
-                    <Button variant="outline">
+                    <Button variant="outline" onClick={handleExport}>
                         <Download className="h-4 w-4 mr-1" /> Export
                     </Button>
 
                     <div className="text-sm text-gray-500">
-                        {paginatedData.currentContacts.length > 0 ? (
-                            `${(page - 1) * perPage + 1}-${Math.min(page * perPage, paginatedData.totalContacts)} of ${paginatedData.totalContacts}`
+                        {contacts.length > 0 ? (
+                            `${(page - 1) * perPage + 1}-${Math.min(page * perPage, totalContacts)} of ${totalContacts}`
                         ) : (
                             '0-0 of 0'
                         )}
@@ -342,8 +355,8 @@ const ContactsList = ({ refreshTrigger, onRefresh }) => {
                         <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setPage(p => Math.min(paginatedData.totalPages, p + 1))}
-                            disabled={page === paginatedData.totalPages || paginatedData.totalPages === 0}
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            disabled={page === totalPages || totalPages === 0}
                         >
                             &#187;
                         </Button>
@@ -353,109 +366,113 @@ const ContactsList = ({ refreshTrigger, onRefresh }) => {
 
             <div className="flex space-x-4">
                 <div className={showFilters ? "w-3/4" : "w-full"}>
-                    <div className="bg-white rounded-md border shadow-sm">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-[50px]"></TableHead>
-                                    <TableHead
-                                        className="cursor-pointer hover:bg-gray-50"
-                                        onClick={() => handleSort('name')}
-                                    >
-                                        <div className="flex items-center">
-                                            Contact Name {getSortIcon('name')}
-                                        </div>
-                                    </TableHead>
-                                    <TableHead
-                                        className="cursor-pointer hover:bg-gray-50"
-                                        onClick={() => handleSort('job_title')}
-                                    >
-                                        <div className="flex items-center">
-                                            Title {getSortIcon('job_title')}
-                                        </div>
-                                    </TableHead>
-                                    <TableHead
-                                        className="cursor-pointer hover:bg-gray-50"
-                                        onClick={() => handleSort('company_id')}
-                                    >
-                                        <div className="flex items-center">
-                                            Company {getSortIcon('company_id')}
-                                        </div>
-                                    </TableHead>
-                                    <TableHead>Email</TableHead>
-                                    <TableHead>Phone</TableHead>
-                                    <TableHead>Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {paginatedData.currentContacts.length > 0 ? (
-                                    paginatedData.currentContacts.map(contact => (
-                                        <TableRow key={contact.id}>
-                                            <TableCell>
-                                                <Checkbox
-                                                    checked={selectedContacts.includes(contact.id)}
-                                                    onCheckedChange={(checked) => handleSelectContact(contact.id, checked)}
-                                                />
-                                            </TableCell>
-                                            <TableCell className="font-medium">
-                                                <button
-                                                    onClick={() => navigate(`/contacts/${contact.id}`)}
-                                                    className="text-blue-600 hover:underline font-medium text-left"
-                                                >
-                                                    {contact.name || 'Unnamed'}
-                                                </button>
-                                            </TableCell>
-                                            <TableCell>{contact.job_title || '-'}</TableCell>
-                                            <TableCell>{contact.company_name || '-'}</TableCell>
-                                            <TableCell>
-                                                {contact.email ? (
-                                                    <a href={`mailto:${contact.email}`} className="text-blue-600 hover:underline flex items-center">
-                                                        <Mail className="h-4 w-4 mr-1" />
-                                                        {contact.email.length > 25 ? contact.email.slice(0, 25) + '...' : contact.email}
-                                                    </a>
-                                                ) : '-'}
-                                            </TableCell>
-                                            <TableCell>
-                                                {contact.phone ? (
-                                                    <a href={`tel:${contact.phone}`} className="text-blue-600 hover:underline flex items-center">
-                                                        <Phone className="h-4 w-4 mr-1" /> {contact.phone}
-                                                    </a>
-                                                ) : '-'}
-                                            </TableCell>
-                                            <TableCell>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="sm">
-                                                            <MoreVertical className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                        <DropdownMenuItem onClick={() => navigate(`/contacts/${contact.id}/edit`)}>
-                                                            <Edit className="h-4 w-4 mr-2" /> Edit
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => handleDelete(contact.id)}>
-                                                            <Trash2 className="h-4 w-4 mr-2" /> Delete
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
+                    {loading && page > 1 ? (
+                        <div className="text-center py-10">Loading contacts...</div>
+                    ) : (
+                        <div className="bg-white rounded-md border shadow-sm">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[50px]"></TableHead>
+                                        <TableHead
+                                            className="cursor-pointer hover:bg-gray-50"
+                                            onClick={() => handleSort('name')}
+                                        >
+                                            <div className="flex items-center">
+                                                Contact Name {getSortIcon('name')}
+                                            </div>
+                                        </TableHead>
+                                        <TableHead
+                                            className="cursor-pointer hover:bg-gray-50"
+                                            onClick={() => handleSort('job_title')}
+                                        >
+                                            <div className="flex items-center">
+                                                Title {getSortIcon('job_title')}
+                                            </div>
+                                        </TableHead>
+                                        <TableHead
+                                            className="cursor-pointer hover:bg-gray-50"
+                                            onClick={() => handleSort('company_id')}
+                                        >
+                                            <div className="flex items-center">
+                                                Company {getSortIcon('company_id')}
+                                            </div>
+                                        </TableHead>
+                                        <TableHead>Email</TableHead>
+                                        <TableHead>Phone</TableHead>
+                                        <TableHead>Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {contacts.length > 0 ? (
+                                        contacts.map(contact => (
+                                            <TableRow key={contact.id}>
+                                                <TableCell>
+                                                    <Checkbox
+                                                        checked={selectedContacts.includes(contact.id)}
+                                                        onCheckedChange={(checked) => handleSelectContact(contact.id, checked)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="font-medium">
+                                                    <button
+                                                        onClick={() => navigate(`/contacts/${contact.id}`)}
+                                                        className="text-blue-600 hover:underline font-medium text-left"
+                                                    >
+                                                        {contact.name || 'Unnamed'}
+                                                    </button>
+                                                </TableCell>
+                                                <TableCell>{contact.job_title || '-'}</TableCell>
+                                                <TableCell>{companyMap[contact.company_id] || '-'}</TableCell>
+                                                <TableCell>
+                                                    {contact.email ? (
+                                                        <a href={`mailto:${contact.email}`} className="text-blue-600 hover:underline flex items-center">
+                                                            <Mail className="h-4 w-4 mr-1" />
+                                                            {contact.email.length > 25 ? contact.email.slice(0, 25) + '...' : contact.email}
+                                                        </a>
+                                                    ) : '-'}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {contact.phone ? (
+                                                        <a href={`tel:${contact.phone}`} className="text-blue-600 hover:underline flex items-center">
+                                                            <Phone className="h-4 w-4 mr-1" /> {contact.phone}
+                                                        </a>
+                                                    ) : '-'}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="sm">
+                                                                <MoreVertical className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                            <DropdownMenuItem onClick={() => navigate(`/contacts/${contact.id}/edit`)}>
+                                                                <Edit className="h-4 w-4 mr-2" /> Edit
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleDelete(contact.id)}>
+                                                                <Trash2 className="h-4 w-4 mr-2" /> Delete
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={7} className="text-center py-6 text-gray-500">
+                                                {searchQuery || Object.keys(activeFilters).length > 0
+                                                    ? "No contacts match your filters. Try different search criteria."
+                                                    : "No contacts found. Add your first contact!"}
                                             </TableCell>
                                         </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-6 text-gray-500">
-                                            {searchQuery || Object.keys(activeFilters).length > 0
-                                                ? "No contacts match your filters. Try different search criteria."
-                                                : "No contacts found. Add your first contact!"}
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
 
-                    {paginatedData.totalPages > 1 && (
+                    {totalPages > 1 && (
                         <div className="flex justify-center mt-6">
                             <div className="flex items-center space-x-2">
                                 <Button
@@ -476,14 +493,14 @@ const ContactsList = ({ refreshTrigger, onRefresh }) => {
                                 </Button>
 
                                 <div className="flex items-center space-x-1 mx-2">
-                                    {[...Array(Math.min(5, paginatedData.totalPages))].map((_, i) => {
+                                    {[...Array(Math.min(5, totalPages))].map((_, i) => {
                                         let pageNum;
-                                        if (paginatedData.totalPages <= 5) {
+                                        if (totalPages <= 5) {
                                             pageNum = i + 1;
                                         } else if (page <= 3) {
                                             pageNum = i + 1;
-                                        } else if (page >= paginatedData.totalPages - 2) {
-                                            pageNum = paginatedData.totalPages - 4 + i;
+                                        } else if (page >= totalPages - 2) {
+                                            pageNum = totalPages - 4 + i;
                                         } else {
                                             pageNum = page - 2 + i;
                                         }
@@ -505,16 +522,16 @@ const ContactsList = ({ refreshTrigger, onRefresh }) => {
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => setPage(p => Math.min(paginatedData.totalPages, p + 1))}
-                                    disabled={page === paginatedData.totalPages || paginatedData.totalPages === 0}
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages || totalPages === 0}
                                 >
                                     Next
                                 </Button>
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => setPage(paginatedData.totalPages)}
-                                    disabled={page === paginatedData.totalPages || paginatedData.totalPages === 0}
+                                    onClick={() => setPage(totalPages)}
+                                    disabled={page === totalPages || totalPages === 0}
                                 >
                                     Last
                                 </Button>
@@ -535,7 +552,7 @@ const ContactsList = ({ refreshTrigger, onRefresh }) => {
                 onClose={() => setIsMergeDialogOpen(false)}
                 onMerge={handleMergeConfirm}
                 selectedContacts={selectedContacts}
-                contacts={allContacts.filter(contact => selectedContacts.includes(contact.id))}
+                contacts={contacts.filter(contact => selectedContacts.includes(contact.id))}
             />
         </div>
     );

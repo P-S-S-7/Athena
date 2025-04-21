@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -8,19 +8,23 @@ import { useAuth } from '../contexts/AuthContext';
 const Login = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const { user, fetchUserProfile } = useAuth();
+    const { user, loading, authInitialized, fetchUserProfile } = useAuth();
     const error = new URLSearchParams(location.search).get("error");
     const status = new URLSearchParams(location.search).get("status");
+    const [checkingAuth, setCheckingAuth] = useState(true);
 
     useEffect(() => {
-        if (user) {
-            if (user.role === "admin") {
-                navigate("/admin_dashboard");
-            } else if (user.role === "agent") {
-                navigate("/agent_dashboard");
+        if (authInitialized && !loading) {
+            if (user) {
+                if (user.role === "admin") {
+                    navigate("/admin_dashboard");
+                } else if (user.role === "agent") {
+                    navigate("/agent_dashboard");
+                }
             }
+            setCheckingAuth(false);
         }
-    }, [user, navigate]);
+    }, [user, navigate, loading, authInitialized]);
 
     useEffect(() => {
         if (status === "success") {
@@ -69,30 +73,39 @@ const Login = () => {
         }
     };
 
+    if (checkingAuth) {
+        return (
+            <div className="flex items-center justify-center h-screen">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900"></div>
+                <span className="ml-3 text-lg">Loading...</span>
+            </div>
+        );
+    }
+
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
+        <div className="flex items-center justify-center min-h-screen bg-gray-100 p-6">
             <ToastContainer />
-            <Card className="w-full max-w-md p-8 shadow-lg rounded-lg border border-gray-300 bg-white">
+            <Card className="w-1/4 h-auto p-10 shadow-2xl rounded-2xl border border-gray-300 bg-white">
                 <div className="text-center">
-                    <img src="/Logo.jpg" alt="Logo" className="w-40 mx-auto" />
+                    <img src="/Logo.jpg" alt="Logo" className="w-48 mx-auto" />
                 </div>
-                <h2 className="text-center text-xl font-semibold text-gray-800 mb-4">
+                <h2 className="text-center text-2xl font-bold text-gray-900 mb-6">
                     Sign in to your account
                 </h2>
-                <div className="flex justify-center mb-4">
+                <div className="flex justify-center mb-6">
                     <Button
-                        className="flex items-center gap-2 bg-gray-800 text-white px-4 py-2 rounded-md hover:bg-gray-900 transition"
+                        className="flex items-center gap-3 bg-gray-800 text-white px-6 py-3 text-lg rounded-lg hover:bg-gray-900 transition"
                         onClick={handleGoogleLogin}
                     >
                         <img
                             src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
                             alt="Google logo"
-                            className="w-5"
+                            className="w-6"
                         />
                         Sign in with Google
                     </Button>
                 </div>
-                <div className="text-center text-xs mt-4 p-2 rounded bg-gray-200 text-gray-700">
+                <div className="text-center text-sm mt-6 p-3 rounded bg-gray-200 text-gray-700">
                     🔒 Secure authentication powered by Google OAuth 2.0
                 </div>
             </Card>

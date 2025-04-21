@@ -1,8 +1,8 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { contactMap } from "@/utils/freshdeskMappings";
 import { useNavigate } from "react-router-dom";
+import { useData } from "@/contexts/DataContext";
 
 const TicketTable = ({
     tickets,
@@ -12,6 +12,7 @@ const TicketTable = ({
     priorities
 }) => {
     const navigate = useNavigate();
+    const { contactMap } = useData();
     const getPriorityBadge = (priority) => {
         const priorityColors = {
             1: "bg-green-100 text-green-800",

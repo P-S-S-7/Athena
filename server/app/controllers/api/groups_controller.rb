@@ -1,14 +1,15 @@
 module Api
     class GroupsController < ApplicationController
         def index
-            group_service = Freshdesk::GroupService.new
-            groups = group_service.list_groups
+            groups = Group.all
             render json: { groups: groups }
         end
 
         def show
-            group_service = Freshdesk::GroupService.new
-            group = group_service.get_group(params[:id])
+            group = Group.find_by(id: params[:id])
+            agent_ids = AgentGroupMapping.where(group_id: group.id).pluck(:agent_id)
+            group = group.as_json
+            group = group.merge(agent_ids: agent_ids) if group.present?
             render json: { group: group }
         end
     end

@@ -4,22 +4,6 @@ module Freshdesk
             @client = ApiClient.new
         end
 
-        def list_tickets(params = {})
-            begin
-                default_params = {
-                    order_by: 'created_at',
-                    order_type: 'desc'
-                }
-
-                query = default_params.merge(params)
-                @client.request(:get, '/tickets', {}, query)
-            rescue Freshdesk::Error => e
-                raise e
-            rescue => e
-                raise Freshdesk::RequestError.new("Failed to list tickets: #{e.message}")
-            end
-        end
-
         def get_ticket(id)
             begin
                 @client.request(:get, "/tickets/#{id}")

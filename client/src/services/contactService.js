@@ -4,10 +4,18 @@ import { handleApiError } from '../utils/errorHandler';
 const API_URL = import.meta.env.VITE_API_URL;
 
 const contactService = {
-    getContacts: async (orderBy = 'created_at', orderType = 'desc') => {
+    getContacts: async (orderBy = 'name', orderType = 'asc', page = 1, perPage = 50, filters = {}) => {
         try {
+            const params = {
+                order_by: orderBy,
+                order_type: orderType,
+                page: page,
+                per_page: perPage,
+                ...filters
+            };
+
             const response = await axios.get(`${API_URL}/api/contacts`, {
-                params: { order_by: orderBy, order_type: orderType },
+                params: params,
                 withCredentials: true
             });
             return response.data;
@@ -65,6 +73,10 @@ const contactService = {
 
             return response.data;
         } catch (error) {
+            if (error.response && error.response.status === 422) {
+                console.error("Validation error:", error.response.data);
+                throw new Error(JSON.stringify(error.response.data));
+            }
             console.error("Error creating contact:", error);
             throw handleApiError(error);
         }
@@ -108,6 +120,10 @@ const contactService = {
 
             return response.data;
         } catch (error) {
+            if (error.response && error.response.status === 422) {
+                console.error("Validation error:", error.response.data);
+                throw new Error(JSON.stringify(error.response.data));
+            }
             console.error("Error updating contact:", error);
             throw handleApiError(error);
         }
@@ -177,42 +193,24 @@ const contactService = {
         }
     },
 
-    filterContacts: (contacts, filterParams) => {
-        if (!filterParams || Object.keys(filterParams).length === 0) {
-            return contacts;
+    exportContacts: async () => {
+        try {
+            const response = await axios.get(`${API_URL}/api/contacts/export`, {
+                withCredentials: true,
+                responseType: 'blob'
+            });
+
+            const blob = new Blob([response.data], { type: response.headers['content-type'] });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `contacts_${new Date().toISOString()}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Error exporting contacts:", error);
+            throw handleApiError(error);
         }
-
-        return contacts.filter(contact => {
-            if (filterParams.created_after) {
-                const contactDate = new Date(contact.created_at);
-                const filterDate = new Date(filterParams.created_after);
-                if (contactDate < filterDate) return false;
-            }
-
-            if (filterParams.created_before) {
-                const contactDate = new Date(contact.created_at);
-                const filterDate = new Date(filterParams.created_before);
-                if (contactDate > filterDate) return false;
-            }
-
-            if (filterParams.updated_after) {
-                const contactDate = new Date(contact.updated_at);
-                const filterDate = new Date(filterParams.updated_after);
-                if (contactDate < filterDate) return false;
-            }
-
-            if (filterParams.updated_before) {
-                const contactDate = new Date(contact.updated_at);
-                const filterDate = new Date(filterParams.updated_before);
-                if (contactDate > filterDate) return false;
-            }
-
-            if (filterParams.job_title && !contact.job_title?.toLowerCase().includes(filterParams.job_title.toLowerCase())) {
-                return false;
-            }
-
-            return true;
-        });
     }
 };
 

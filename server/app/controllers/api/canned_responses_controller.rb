@@ -1,8 +1,11 @@
 module Api
   class CannedResponsesController < ApplicationController
     def show
-      freshdesk_service = Freshdesk::CannedResponseService.new
-      response = freshdesk_service.get_response(params[:id])
+      response = CannedResponse.find(params[:id])
+      response = response.as_json
+      attachments = CannedResponseAttachment.where(canned_response_id: params[:id])
+      response = response.merge(attachments: attachments)
+
       render json: response
     end
   end

@@ -13,9 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { contactMap } from "@/utils/freshdeskMappings";
 import { Search, Loader2, X, TicketIcon, MessageSquare, User } from "lucide-react";
 import ticketService from "@/services/ticketService";
+import { useData } from "@/contexts/DataContext";
 
 const MergeTicketDialog = ({ isOpen, onClose, primaryTicket, onMerge }) => {
   const [searchResults, setSearchResults] = useState([]);
@@ -25,6 +25,7 @@ const MergeTicketDialog = ({ isOpen, onClose, primaryTicket, onMerge }) => {
   const [selectedTickets, setSelectedTickets] = useState([]);
   const [isMerging, setIsMerging] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const { contactMap } = useData();
 
   useEffect(() => {
     if (!isOpen) {
@@ -48,7 +49,7 @@ const MergeTicketDialog = ({ isOpen, onClose, primaryTicket, onMerge }) => {
       const result = await ticketService.getTickets();
 
       const filteredTickets = result.tickets.filter(ticket => {
-        if (ticket.id === primaryTicket.id) {
+        if (ticket.id === primaryTicket.id || ticket.status === 4 || ticket.status === 5) {
           return false;
         }
 

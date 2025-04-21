@@ -1,8 +1,7 @@
 module Api
     class AgentsController < ApplicationController
         def index
-            agent_service = Freshdesk::AgentService.new
-            agents = agent_service.list_agents
+            agents = Agent.all
             render json: { agents: agents }
         end
     end

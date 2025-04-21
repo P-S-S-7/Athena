@@ -7,8 +7,7 @@ import {
     Reply, FileText, Forward, Check,
     Merge, Trash2, BarChart, Globe, Ticket, Download, PaperclipIcon,
     Mail, Phone, MessageSquare, X, UserCircle, MessageCircle, Bot,
-    Settings, ShoppingCart, MessagesSquare, ArrowLeft,
-    User
+    Settings, ShoppingCart, MessagesSquare, ArrowLeft, Clock, User, Edit, BarChart2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -16,7 +15,6 @@ import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToastContainer, showSuccessToast } from '@/utils/toast';
-import { sourceMap, contactMap, contactEmailMap, agentMap } from '@/utils/freshdeskMappings';
 import Sidebar from '@/utils/Sidebar';
 import Header from '@/utils/Header';
 import TicketConversations from './ticketDetailComponents/TicketConversations';
@@ -27,6 +25,7 @@ import TicketProperties from './ticketDetailComponents/TicketProperties';
 import { ErrorProvider, useError } from '@/contexts/ErrorContext';
 import MergeTicketDialog from './ticketDetailComponents/MergeTicketDialog';
 import EditTicketDialog from './ticketDetailComponents/EditTicketDialog';
+import { useData } from '@/contexts/DataContext';
 
 const formatDate = (dateString) => {
     if (!dateString) return 'Not set';
@@ -93,6 +92,7 @@ const TicketDetailsContent = () => {
     const [error, setError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
     const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
+    const { sourceMap, contactMap, contactEmailMap, agentMap, companyMap } = useData();
 
     const refreshData = () => {
         setRefreshKey(prevKey => prevKey + 1);
@@ -252,7 +252,7 @@ const TicketDetailsContent = () => {
         );
     }
 
-    const isTicketClosed = ticket.status === 5;
+    const isTicketClosed = ticket.status === 5 || ticket.status === 4;
 
     const renderActionComponent = () => {
         switch (replyType) {
@@ -374,7 +374,9 @@ const TicketDetailsContent = () => {
                         <div className="flex-grow">
                             <Card className="p-4 mb-4">
                                 <div className="flex items-center">
-                                    {getLargeSourceIcon(ticket.source)}
+                                    <div className="h-8 w-8 mr-1">
+                                        {getLargeSourceIcon(ticket.source)}
+                                    </div>
                                     <h1 className="text-xl font-medium ml-3">{ticket.subject}</h1>
                                 </div>
                                 {ticket.responder_id && (sourceMap[ticket.source] === 'Portal' || sourceMap[ticket.source] === 'Phone') && (
@@ -389,14 +391,14 @@ const TicketDetailsContent = () => {
                                                 {contactMap[ticket.requester_id] ? contactMap[ticket.requester_id].charAt(0) : '?'}
                                             </AvatarFallback>
                                         </Avatar>
-                                        <h3 className="text-sm text-gray-800 ml-2">
+                                        <h3 className="text-gray-800 ml-2 ">
                                             <span className="font-bold text-blue-600">
                                                 {contactMap[ticket.requester_id] || 'Unknown Contact'}
                                             </span>
-                                            {` reported via ${sourceMap[ticket.source]}`}
+                                            <span>{` reported via ${sourceMap[ticket.source]}`}</span>
                                         </h3>
                                     </div>
-                                    <p className="text-xs text-gray-500 text-right">
+                                    <p className="text-sm text-gray-700 text-right">
                                         {formatDate(ticket.created_at)}
                                         <span className="ml-2">
                                             ({formatDistanceToNow(parseISO(ticket.created_at), { addSuffix: true })})
@@ -404,8 +406,15 @@ const TicketDetailsContent = () => {
                                     </p>
                                 </div>
                                 <div className="flex items-start">
-                                    {getSourceIcon(ticket.source)}
+                                    <div className="h-4 w-4 mt-1 mr-2">
+                                        {getSourceIcon(ticket.source)}
+                                    </div>
                                     <div className="flex flex-col ml-6">
+                                        {ticket.support_email && (
+                                            <div className="input text-gray-600 mb-2">
+                                                <span className="font-semibold">To:</span> <span className="italic">{ticket.support_email}</span>
+                                            </div>
+                                        )}
                                         <div
                                             className="ticket-description prose max-w-none"
                                             dangerouslySetInnerHTML={{ __html: ticket.description_html || ticket.description }}
@@ -435,7 +444,7 @@ const TicketDetailsContent = () => {
                                                             <div key={index} className="group relative flex items-center p-2 rounded-lg bg-white border border-gray-300 shadow-sm transition-all hover:shadow-md">
                                                                 <div className="cursor-pointer flex items-center gap-2 text-gray-700 hover:text-blue-600 group-hover:underline" onClick={openLink}>
                                                                     <PaperclipIcon className="h-4 w-4 text-gray-400" />
-                                                                    <span className="text-sm font-medium truncate max-w-[150px]">{attachment.name}</span>
+                                                                    <span className="text-sm font-medium truncate max-w-[150px] italic">{attachment.name}</span>
                                                                 </div>
 
                                                                 <button onClick={downloadFile} className="ml-2 text-blue-600 hover:text-blue-700">
@@ -489,14 +498,30 @@ const TicketDetailsContent = () => {
                             </div>
                         </div>
 
-                        <div className="w-80 flex-shrink-0">
-                            <Tabs defaultValue="properties">
-                                <TabsList className="grid w-full grid-cols-2">
-                                    <TabsTrigger value="properties">Properties</TabsTrigger>
-                                    <TabsTrigger value="contact">Contact Details</TabsTrigger>
+                        <div className="w-100">
+                            <Tabs defaultValue="properties" className="w-full mb-4">
+                                <TabsList className="w-full grid grid-cols-2 bg-gray-50 rounded-lg p-1 h-12">
+                                    <TabsTrigger
+                                        value="properties"
+                                        className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                                    >
+                                        <div className="flex items-center justify-center gap-1.5">
+                                            <BarChart2 className="h-4 w-4 text-gray-600" />
+                                            <span className="font-medium">Properties</span>
+                                        </div>
+                                    </TabsTrigger>
+                                    <TabsTrigger
+                                        value="contact"
+                                        className="rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                                    >
+                                        <div className="flex items-center justify-center gap-1.5">
+                                            <User className="h-4 w-4 text-gray-600" />
+                                            <span className="font-medium">Contact Details</span>
+                                        </div>
+                                    </TabsTrigger>
                                 </TabsList>
 
-                                <TabsContent value="properties" className="mt-4">
+                                <TabsContent value="properties" className="mt-4 w-100">
                                     <TicketProperties
                                         ticket={ticket}
                                         isTicketClosed={isTicketClosed}
@@ -505,27 +530,81 @@ const TicketDetailsContent = () => {
                                 </TabsContent>
 
                                 <TabsContent value="contact" className="mt-4">
-                                    <Card className="p-4">
-                                        <div className="flex flex-col items-center mb-4">
-                                            <Avatar className="h-16 w-16 mb-2">
-                                                <AvatarFallback className="bg-primary/10 text-primary text-xl">
+                                    <Card className="border border-gray-200 rounded-b-lg shadow-sm overflow-hidden">
+                                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 flex flex-col sm:flex-row items-center gap-4">
+                                            <Avatar className="h-16 w-16 ring-2 ring-white shadow-md">
+                                                <AvatarFallback className="bg-primary text-primary-foreground text-xl font-semibold">
                                                     {contactMap[ticket.requester_id] ? contactMap[ticket.requester_id].charAt(0) : '?'}
                                                 </AvatarFallback>
                                             </Avatar>
-                                            <h3 className="font-medium text-lg">{contactMap[ticket.requester_id] || 'Unknown Contact'}</h3>
-                                            <p className="text-sm text-gray-500">{contactEmailMap[ticket.requester_id] || 'No email'}</p>
+                                            <div className="text-center sm:text-left">
+                                                <h3 className="font-semibold text-lg text-gray-800">{contactMap[ticket.requester_id] || 'Unknown Contact'}</h3>
+                                                {contactEmailMap[ticket.requester_id] ? (
+                                                    <a href={`mailto:${contactEmailMap[ticket.requester_id]}`}
+                                                    className="text-sm text-blue-600 hover:underline flex items-center justify-center sm:justify-start gap-1 italic">
+                                                        <Mail className="h-3.5 w-3.5" />
+                                                        {contactEmailMap[ticket.requester_id]}
+                                                    </a>
+                                                ) : (
+                                                    <p className="text-sm text-gray-500 italic">No email available</p>
+                                                )}
+                                            </div>
                                         </div>
 
-                                        <Separator className="my-4" />
-
-                                        <div className="space-y-3">
-                                            <div>
-                                                <div className="text-sm font-medium mb-1">Timeline:</div>
-                                                <div className="text-sm border border-gray-300 p-4 rounded-md shadow-sm">Add timeline here.</div>
+                                        <div className="p-4 space-y-4">
+                                            <div className="space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="bg-blue-100 p-1.5 rounded-full">
+                                                        <Clock className="h-4 w-4 text-blue-700" />
+                                                    </div>
+                                                    <h4 className="text-sm font-medium text-gray-700">Contact Timeline</h4>
+                                                </div>
+                                                <div className="bg-gray-50 border border-gray-200 p-4 rounded-md text-sm text-gray-600">
+                                                    <div className="flex flex-col space-y-3">
+                                                        <div className="italic">Timeline to be added here.</div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <Button variant="outline" className="w-full text-sm" onClick={() => navigate(`/contacts/${ticket.requester_id}`)}>
-                                                View Contact Details
-                                            </Button>
+
+                                            <div className="space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="bg-purple-100 p-1.5 rounded-full">
+                                                        <User className="h-4 w-4 text-purple-700" />
+                                                    </div>
+                                                    <h4 className="text-sm font-medium text-gray-700">Contact Information</h4>
+                                                </div>
+                                                <div className="bg-gray-50 border border-gray-200 p-4 rounded-md text-sm grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    {ticket.company_id && companyMap[ticket.company_id] && (
+                                                        <div>
+                                                            <p className="text-xs text-gray-500">Company</p>
+                                                            <p className="font-medium italic">{companyMap[ticket.company_id]}</p>
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <p className="text-xs text-gray-500">Contact ID</p>
+                                                        <p className="font-medium italic">#{ticket.requester_id}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full sm:flex-1 text-sm flex items-center gap-1"
+                                                    onClick={() => navigate(`/contacts/${ticket.requester_id}`)}
+                                                >
+                                                    <User className="h-3.5 w-3.5" />
+                                                    View Contact
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full sm:flex-1 text-sm flex items-center gap-1"
+                                                    onClick={() => navigate(`/contacts/${ticket.requester_id}/edit`)}
+                                                >
+                                                    <Edit className="h-3.5 w-3.5" />
+                                                    Edit Contact
+                                                </Button>
+                                            </div>
                                         </div>
                                     </Card>
                                 </TabsContent>
